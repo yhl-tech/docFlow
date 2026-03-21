@@ -129,6 +129,67 @@ class ExportService:
                 logger.warning("pandoc 未找到，导出不可用")
         return self._pandoc_ok
 
+    async def docx_to_markdown(self, docx_path: str) -> str:
+        """
+        Word (.docx) → Markdown，公式转为 $...$ / $$...$$ LaTeX。
+        与 export_docx 使用同一 Pandoc，OMML↔LaTeX 与导出路径一致，避免第三方库损坏公式。
+        """
+        if not await self.pandoc_available():
+            raise PandocNotAvailableError(
+                "未安装 Pandoc，无法高质量解析 Word 公式。请安装：https://pandoc.org"
+            )
+        import subprocess
+        from functools import partial
+
+        tmpdir = tempfile.mkdtemp()
+        try:
+            out_md = os.path.join(tmpdir, "parsed.md")
+            abs_docx = os.path.abspath(docx_path)
+            cmd = [
+                self._pandoc_bin_path,
+                "--from=docx",
+                "--to=markdown+tex_math_dollars+tex_math_single_backslash",
+                "-o",
+                out_md,
+                abs_docx,
+            ]
+
+            def quote_arg(arg: str) -> str:
+                return f'"{arg}"' if " " in arg else arg
+
+            quoted = [quote_arg(cmd[0])] + cmd[1:]
+            cmd_str = " ".join(quoted)
+            loop = asyncio.get_event_loop()
+            proc = await loop.run_in_executor(
+                None,
+                partial(
+                    subprocess.run,
+                    cmd_str,
+                    shell=True,
+                    capture_output=True,
+                    cwd=tmpdir,
+                    timeout=120,
+                ),
+            )
+            if proc.returncode != 0:
+                err = (proc.stderr or b"").decode("utf-8", errors="replace")[:500]
+                logger.error(f"Pandoc docx→md 失败: {err}")
+                raise RuntimeError(f"Pandoc 解析 docx 失败: {err[:200]}")
+            if not os.path.isfile(out_md):
+                raise RuntimeError("Pandoc 未生成 Markdown 文件")
+            with open(out_md, encoding="utf-8") as f:
+                text = f.read()
+            text = re.sub(
+                r"^---\s*\n.*?\n---\s*\n",
+                "",
+                text,
+                count=1,
+                flags=re.DOTALL,
+            )
+            return text.lstrip("\n")
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
     # wkhtmltopdf 在 Windows 上的默认安装路径（未加入 PATH 时直接用全路径）
     _WKHTMLTOPDF_PATHS = [
         "wkhtmltopdf",  # PATH 中可用
@@ -608,16 +669,22 @@ class ExportService:
                 logger.error(f"读取 docx 文件失败: {e}")
                 raise RuntimeError(f"读取导出文件失败: {e}")
 
+    _MATH_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+
     @staticmethod
     def _set_rpr_color_black(rPr_elem) -> None:
-        """将 w:rPr 的文字颜色设为黑色，与正文一致（避免 Pandoc 默认标题蓝色）。"""
+        """
+        将 w:rPr 文字颜色设为纯黑，并去掉主题色（否则 Word 仍显示蓝/青链接色）。
+        """
         from docx.oxml import OxmlElement
         from docx.oxml.ns import qn
-        color_elem = rPr_elem.find(qn("w:color"))
-        if color_elem is None:
-            color_elem = OxmlElement("w:color")
-            rPr_elem.append(color_elem)
+        # 删除所有 w:color，避免残留 themeColor
+        for c in list(rPr_elem):
+            if c.tag == qn("w:color"):
+                rPr_elem.remove(c)
+        color_elem = OxmlElement("w:color")
         color_elem.set(qn("w:val"), "000000")
+        rPr_elem.append(color_elem)
 
     @staticmethod
     def _apply_docx_font(docx_path: str, cjk_font: str = "Microsoft YaHei") -> None:
@@ -694,19 +761,91 @@ class ExportService:
                 except (KeyError, AttributeError):
                     pass
 
-            # ── 3. 处理文档正文中所有带有字体属性的段落 ───────────────────────────
-            # 遍历所有段落，移除可能导致字体不生效的内联 rPr
-            for paragraph in doc.paragraphs:
-                # 检查段落样式是否有字体设置
-                pPr = paragraph.element.find(qn("w:pPr"))
-                if pPr is not None:
-                    pPr_rPr = pPr.find(qn("w:rPr"))
-                    if pPr_rPr is not None:
-                        # 段落级别已有字体设置，跳过
-                        pass
+            def _run_contains_omath(r_elem) -> bool:
+                for child in r_elem:
+                    if child.tag.startswith(f"{{{ExportService._MATH_NS}}}"):
+                        return True
+                return False
+
+            def _set_omath_fonts(omath_elem, latin: str = "Times New Roman") -> None:
+                """
+                遍历 m:oMath 树，将所有 m:rPr 的 w:rFonts 设为指定字体（Times New Roman），
+                覆盖 Word 默认的 Cambria Math，使公式与正文风格一致。
+                """
+                for mrPr in omath_elem.iter(qn("m:rPr")):
+                    rFonts = mrPr.find(qn("w:rFonts"))
+                    if rFonts is None:
+                        rFonts = OxmlElement("w:rFonts")
+                        mrPr.insert(0, rFonts)
+                    rFonts.set(qn("w:ascii"), latin)
+                    rFonts.set(qn("w:hAnsi"), latin)
+                    # eastAsia 保留空白，让系统回退到正文字体
+                    for attr in list(rFonts.attrib):
+                        if attr.endswith("eastAsia") or attr.endswith("cs"):
+                            del rFonts.attrib[attr]
+
+            def _normalize_rpr(rPr_elem_inner) -> None:
+                set_font_properties(
+                    rPr_elem_inner, cjk_font, "Times New Roman", "Times New Roman"
+                )
+                ExportService._set_rpr_color_black(rPr_elem_inner)
+
+            # ── 3. 正文 / 表格 / 页眉页脚：每个文字 run 统一字体+黑色 ─────────────
+            # Pandoc 常把「1. xxx」列为列表而非标题，样式改不到；必须用 run 级覆盖。
+            # 含 OMML 的 run 不改字体，避免公式异常。
+            latin = "Times New Roman"
+            xml_roots = [doc.element.body]
+            try:
+                from docx.opc.constants import RELATIONSHIP_TYPE as RT
+
+                for rel in doc.part.rels.values():
+                    if rel.reltype in (RT.HEADER, RT.FOOTER):
+                        el = rel.target_part.element
+                        if el is not None:
+                            xml_roots.append(el)
+            except Exception:
+                pass
+
+            for root in xml_roots:
+                for el in root.iter(qn("w:r")):
+                    if _run_contains_omath(el):
+                        rPr_m = el.find(qn("w:rPr"))
+                        if rPr_m is None:
+                            rPr_m = OxmlElement("w:rPr")
+                            el.insert(0, rPr_m)
+                        ExportService._set_rpr_color_black(rPr_m)
+                        # 公式本身用 Times New Roman
+                        for child in el:
+                            if child.tag.startswith(f"{{{ExportService._MATH_NS}}}"):
+                                _set_omath_fonts(child, latin)
+                        continue
+                    if not any(
+                        c.tag == qn("w:t")
+                        or c.tag == qn("w:tab")
+                        or c.tag == qn("w:br")
+                        for c in el
+                    ):
+                        continue
+                    rPr_run = el.find(qn("w:rPr"))
+                    if rPr_run is None:
+                        rPr_run = OxmlElement("w:rPr")
+                        el.insert(0, rPr_run)
+                    _normalize_rpr(rPr_run)
+
+            # ── 4. 段落级 pPr/rPr（列表缩进等带来的主题色）──────────────────────
+            for root in xml_roots:
+                for p in root.iter(qn("w:p")):
+                    pPr = p.find(qn("w:pPr"))
+                    if pPr is None:
+                        continue
+                    p_rPr = pPr.find(qn("w:rPr"))
+                    if p_rPr is not None:
+                        _normalize_rpr(p_rPr)
 
             doc.save(docx_path)
-            logger.info(f"docx 字体已设置为 {cjk_font} + Times New Roman")
+            logger.info(
+                f"docx 已统一为 {cjk_font}+{latin}、黑色（含列表/正文 run 级覆盖）"
+            )
         except Exception as e:
             logger.warning(f"设置 docx 字体失败，跳过此步骤: {e}")
             # 字体设置失败不影响导出，文件已生成

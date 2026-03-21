@@ -28,6 +28,8 @@ export { api, createApi } from './instance'
 export { default as aiService, default } from './ai'
 export { default as exportService } from './export'
 export { default as editorService } from './editor'
+export { default as authService } from './auth'
+export { default as paymentService } from './payment'
 
 // 导出类型
 export type {
@@ -61,3 +63,6 @@ export type {
   SaveDocumentParams,
   SaveDocumentResponse,
 } from './editor'
+
+export type { UserInfo } from './auth'
+export type { PlanType, PayChannel } from './payment'

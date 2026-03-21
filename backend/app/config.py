@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     CORS_ORIGINS: str = "http://localhost:3000"
 
+    # 模拟支付（开发/测试用；生产环境务必关闭）
+    ENABLE_MOCK_PAYMENT: bool = False
+
     # 阿里云短信
     ALIYUN_ACCESS_KEY_ID: str = ""
     ALIYUN_ACCESS_KEY_SECRET: str = ""

@@ -8,7 +8,7 @@ from loguru import logger
 from sqlalchemy import select
 
 from app.core.dependencies import OptionalUser, DB
-from app.core.exceptions import QuotaExceededError
+from app.core.exceptions import QuotaExceededError, InsufficientBalanceError
 from app.core.limiter import limiter
 from app.models.record import ExportRecord
 from app.schemas.export import ExportRequest
@@ -17,21 +17,63 @@ from app.services.export_service import PandocNotAvailableError, export_service
 
 router = APIRouter()
 
+# 每次导出的单次费用（单位：分，100 分 = 1 元）
+PER_EXPORT_CENTS = 100
+
 
 # ------------------------------------------------------------------ #
-#  辅助：额度检查 & 扣减
+#  辅助：额度检查 & 扣减（支持免费次数 + 余额 + 会员）
 # ------------------------------------------------------------------ #
 
 
-async def _check_and_deduct_quota(user, db) -> None:
-    """检查余量；不足则抛 QuotaExceededError；足够则原子性扣减。"""
+async def _check_and_deduct_quota(user, db, deduction_type_out: list | None = None) -> None:
+    """
+    计费优先级：
+    1. 未登录 -> 跳过（游客体验）
+    2. 有效会员 -> 免费导出，不扣任何配额/余额
+    3. 有免费次数剩余 -> 扣 quota_used
+    4. 余额足够（>= 100分）-> 扣 balance_cents
+    5. 否则抛 InsufficientBalanceError（前端引导充值）
+
+    deduction_type_out: 用于传出本次扣费类型，["quota"] / ["balance"] / ["none"]
+    """
     if user is None:
-        return  # 未登录用户跳过额度检查
-    if user.quota_remaining <= 0:
-        raise QuotaExceededError()
-    user.quota_used += 1
-    await db.commit()
-    await db.refresh(user)
+        return
+
+    if user.is_member_active:
+        # 会员不计费
+        if deduction_type_out is not None:
+            deduction_type_out.append("none")
+        return
+
+    if user.quota_remaining > 0:
+        user.quota_used += 1
+        await db.commit()
+        await db.refresh(user)
+        if deduction_type_out is not None:
+            deduction_type_out.append("quota")
+        return
+
+    if user.balance_cents >= PER_EXPORT_CENTS:
+        user.balance_cents -= PER_EXPORT_CENTS
+        await db.commit()
+        await db.refresh(user)
+        if deduction_type_out is not None:
+            deduction_type_out.append("balance")
+        return
+
+    raise InsufficientBalanceError()
+
+
+def _refund_deduction(user, db, deduction_types: list) -> None:
+    """对称退还：撤销本次导出的扣费（quota_used 或 balance_cents）"""
+    if not user or not deduction_types:
+        return
+    dtype = deduction_types[-1]
+    if dtype == "quota":
+        user.quota_used = max(0, user.quota_used - 1)
+    elif dtype == "balance":
+        user.balance_cents += PER_EXPORT_CENTS
 
 
 async def _write_record(
@@ -78,8 +120,11 @@ async def export_docx(
     """
     char_count = len(body.markdown)
 
-    # 1. 额度检查（未登录用户跳过）
-    await _check_and_deduct_quota(current_user, db)
+    # 记录本次导出的扣费方式，用于失败时对称退还
+    deduction_type: list = []
+
+    # 1. 额度检查（会员跳过 / 扣免费次数 / 扣余额）
+    await _check_and_deduct_quota(current_user, db, deduction_type)
 
     # 2. 调用导出服务
     logger.info(f"开始导出 docx, 字数={char_count}, template={body.template}, page_size={body.page_size}")
@@ -90,22 +135,21 @@ async def export_docx(
             page_size=body.page_size,
         )
     except PandocNotAvailableError as exc:
-        # 记录失败，但不扣额度（已扣，需要退还）
         if current_user:
-            current_user.quota_used = max(0, current_user.quota_used - 1)
+            _refund_deduction(current_user, db, deduction_type)
             await db.commit()
             await _write_record(db, current_user.id, "docx", body.template, char_count, "failed", str(exc))
         raise HTTPException(status_code=503, detail={"error": str(exc), "code": "PANDOC_NOT_AVAILABLE"})
     except RuntimeError as exc:
         if current_user:
-            current_user.quota_used = max(0, current_user.quota_used - 1)
+            _refund_deduction(current_user, db, deduction_type)
             await db.commit()
             await _write_record(db, current_user.id, "docx", body.template, char_count, "failed", str(exc))
             logger.exception(f"export_docx 失败 user={current_user.id}: {exc}")
         raise HTTPException(status_code=500, detail={"error": "Word 导出失败，请稍后重试", "code": "EXPORT_FAILED"})
     except Exception as exc:
         if current_user:
-            current_user.quota_used = max(0, current_user.quota_used - 1)
+            _refund_deduction(current_user, db, deduction_type)
             await db.commit()
             await _write_record(db, current_user.id, "docx", body.template, char_count, "failed", str(exc))
             logger.exception(f"export_docx 未预期异常 user={current_user.id if current_user else 'anonymous'}")
@@ -153,8 +197,11 @@ async def export_pdf(
     """
     char_count = len(body.markdown)
 
-    # 1. 额度检查（未登录用户跳过）
-    await _check_and_deduct_quota(current_user, db)
+    # 记录本次导出的扣费方式，用于失败时对称退还
+    deduction_type: list = []
+
+    # 1. 额度检查（会员跳过 / 扣免费次数 / 扣余额）
+    await _check_and_deduct_quota(current_user, db, deduction_type)
 
     # 2. 调用导出服务
     logger.info(f"开始导出 pdf, 字数={char_count}, template={body.template}, page_size={body.page_size}")
@@ -166,20 +213,20 @@ async def export_pdf(
         )
     except PandocNotAvailableError as exc:
         if current_user:
-            current_user.quota_used = max(0, current_user.quota_used - 1)
+            _refund_deduction(current_user, db, deduction_type)
             await db.commit()
             await _write_record(db, current_user.id, "pdf", body.template, char_count, "failed", str(exc))
         raise HTTPException(status_code=503, detail={"error": str(exc), "code": "PANDOC_NOT_AVAILABLE"})
     except RuntimeError as exc:
         if current_user:
-            current_user.quota_used = max(0, current_user.quota_used - 1)
+            _refund_deduction(current_user, db, deduction_type)
             await db.commit()
             await _write_record(db, current_user.id, "pdf", body.template, char_count, "failed", str(exc))
             logger.error(f"export_pdf 失败 user={current_user.id}: {exc}")
         raise HTTPException(status_code=500, detail={"error": str(exc), "code": "EXPORT_FAILED"})
     except Exception as exc:
         if current_user:
-            current_user.quota_used = max(0, current_user.quota_used - 1)
+            _refund_deduction(current_user, db, deduction_type)
             await db.commit()
             await _write_record(db, current_user.id, "pdf", body.template, char_count, "failed", str(exc))
             logger.exception(f"export_pdf 未预期异常 user={current_user.id if current_user else 'anonymous'}")

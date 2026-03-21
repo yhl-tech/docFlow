@@ -4,6 +4,7 @@
 
 - Python 3.11+
 - Conda（推荐）
+- **Pandoc**（Word 导出 + **上传 docx 解析公式** 均依赖，与导出同一套 OMML↔LaTeX）
 
 ---
 

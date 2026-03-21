@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import List, Optional
 
 import httpx
-from docxlatex import Document as DocxLatexDocument
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -13,6 +12,7 @@ from sqlalchemy import select, delete
 
 from app.core.dependencies import CurrentUser, DB
 from app.models.document import Document
+from app.services.export_service import PandocNotAvailableError, export_service
 
 router = APIRouter()
 
@@ -322,8 +322,8 @@ async def generate_toc(body: GenerateTocRequest):
 @router.post("/parse-docx", summary="解析 Word 文档")
 async def parse_docx(file: UploadFile = File(...)):
     """
-    解析 Word (.docx) 文档，提取文本和数学公式。
-    返回：纯文本内容和公式列表（LaTeX 格式）
+    解析 Word (.docx) → Markdown（含 $...$ / $$...$$ 公式）。
+    默认用 Pandoc（与导出 Word 同一套 OMML↔LaTeX）；不可用时回退 docxlatex。
     """
     # 验证文件类型
     if not file.filename.endswith('.docx'):
@@ -338,20 +338,37 @@ async def parse_docx(file: UploadFile = File(...)):
         tmp_path = tmp.name
 
     try:
-        # 使用 docxlatex 解析文档
-        doc = DocxLatexDocument(tmp_path)
+        try:
+            text = await export_service.docx_to_markdown(tmp_path)
+            parse_source = "pandoc"
+            equations: list = []
+        except (PandocNotAvailableError, RuntimeError) as e:
+            from loguru import logger
 
-        # 获取纯文本
-        text = doc.get_text()
-
-        # 获取公式列表（LaTeX 格式）
-        equations = doc.equations if hasattr(doc, 'equations') else []
+            logger.warning(f"parse-docx 回退 docxlatex: {e}")
+            try:
+                from docxlatex import Document as DocxLatexDocument
+            except ImportError:
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "error": "请安装 Pandoc 以正确解析 Word 公式，或 pip install docxlatex",
+                        "code": "PARSE_UNAVAILABLE",
+                    },
+                ) from e
+            doc = DocxLatexDocument(tmp_path)
+            text = doc.get_text()
+            equations = doc.equations if hasattr(doc, "equations") else []
+            parse_source = "docxlatex"
 
         return {
             "text": text,
             "equations": equations,
             "filename": file.filename,
+            "parse_source": parse_source,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail={"error": f"文档解析失败: {str(e)}", "code": "PARSE_ERROR"})
     finally:

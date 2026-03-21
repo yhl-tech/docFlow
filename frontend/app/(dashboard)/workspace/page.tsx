@@ -2,11 +2,12 @@
 
 import { WorkspaceChat } from '@/components/workspace/WorkspaceChat'
 import { WorkspaceEditor } from '@/components/workspace/WorkspaceEditor'
+import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader'
 
 export default function WorkspacePage() {
   return (
     <div
-      className="workspace-container flex overflow-hidden bg-white"
+      className="flex flex-col overflow-hidden bg-white"
       style={{
         position: 'fixed',
         top: 0,
@@ -18,16 +19,19 @@ export default function WorkspacePage() {
         maxHeight: '100vh',
       }}
     >
-      {/* 左侧 AI 对话区 - 固定高度，禁止本块产生页面级滚动 */}
-      <div
-        className="workspace-chat-column flex h-full shrink-0 flex-col overflow-hidden"
-        style={{ height: '100vh', maxHeight: '100vh' }}
-      >
-        <WorkspaceChat />
-      </div>
+      {/* 顶部导航栏：标题 + 会员 + 导出 + 全屏 + 用户头像 */}
+      <WorkspaceHeader />
 
-      {/* 右侧创作工作台 - 核心编辑区域 */}
-      <WorkspaceEditor />
+      {/* 下方左右两栏 */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* 左侧 AI 对话区 - 固定宽度，禁止产生页面级滚动 */}
+        <div className="workspace-chat-column flex shrink-0 flex-col overflow-hidden">
+          <WorkspaceChat />
+        </div>
+
+        {/* 右侧创作工作台 - 核心编辑区域 */}
+        <WorkspaceEditor />
+      </div>
     </div>
   )
 }

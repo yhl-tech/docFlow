@@ -1,10 +1,11 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { exportService, type ExportFormat } from '@/lib/api'
 import { useEditorStore } from '@/store/editorStore'
 import { downloadBlob, extractFilename } from '@/lib/download'
+import { UpgradeModal } from '@/components/pricing/UpgradeModal'
 
 // ============================================================
 // 类型定义
@@ -28,6 +29,9 @@ export interface UseExportReturn {
   exportToExcel: () => Promise<boolean>
   /** 导出为图片 */
   exportToImage: () => Promise<boolean>
+  /** 升级弹窗状态（供外部控制） */
+  upgradeModalOpen: boolean
+  setUpgradeModalOpen: (open: boolean) => void
 }
 
 // ============================================================
@@ -46,25 +50,28 @@ const FILE_EXT: Record<ExportFormat, string> = {
 // 工具函数
 // ============================================================
 
-function handleApiError(error: unknown, fallbackMsg: string, onError?: (error: Error) => void): string {
-  const err = error as Error
+function handleApiError(error: unknown, fallbackMsg: string, onError?: (error: Error) => void): { message: string; code?: string } {
+  const err = error as any
   let message = fallbackMsg
+  let code: string | undefined
 
   if (err.response?.data instanceof Blob) {
-    // 后端返回 JSON 错误时是 Blob，需要解析
     try {
       const text = (err.response.data as Blob).text()
-      message = JSON.parse(text).error ?? fallbackMsg
+      const data = JSON.parse(text)
+      message = data.error ?? fallbackMsg
+      code = data.code
     } catch { /* 忽略解析失败 */ }
   } else if (err.response?.data?.error) {
     message = err.response.data.error
+    code = err.response.data.code
   } else if (err.code === 'ECONNABORTED') {
     message = '请求超时，文档可能过大，请稍后重试'
   }
 
   toast.error(message)
   onError?.(err)
-  return message
+  return { message, code }
 }
 
 // ============================================================
@@ -82,6 +89,7 @@ function handleApiError(error: unknown, fallbackMsg: string, onError?: (error: E
 export function useExport(options: UseExportOptions = {}): UseExportReturn {
   const { onSuccess, onError } = options
   const { content, template, exportStatus, setExportStatus } = useEditorStore()
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
 
   /** 导出校验 */
   const validate = useCallback((): boolean => {
@@ -115,7 +123,10 @@ export function useExport(options: UseExportOptions = {}): UseExportReturn {
       onSuccess?.(filename)
       return true
     } catch (error) {
-      handleApiError(error, '导出失败，请重试', onError)
+      const { message, code } = handleApiError(error, '导出失败，请重试', onError)
+      if (code === 'INSUFFICIENT_BALANCE' || code === 'QUOTA_EXCEEDED') {
+        setUpgradeModalOpen(true)
+      }
       setExportStatus('error', '导出失败')
       return false
     }
@@ -133,6 +144,8 @@ export function useExport(options: UseExportOptions = {}): UseExportReturn {
     exportToPdf,
     exportToExcel,
     exportToImage,
+    upgradeModalOpen,
+    setUpgradeModalOpen,
   }
 }
 

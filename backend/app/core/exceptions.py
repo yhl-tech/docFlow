@@ -16,7 +16,12 @@ class AppError(Exception):
 
 class QuotaExceededError(AppError):
     def __init__(self):
-        super().__init__("导出次数已用完，请升级套餐", "QUOTA_EXCEEDED", 402)
+        super().__init__("免费次数已用完，请开通会员或充值余额", "QUOTA_EXCEEDED", 402)
+
+
+class InsufficientBalanceError(AppError):
+    def __init__(self):
+        super().__init__("余额不足，请先充值", "INSUFFICIENT_BALANCE", 402)
 
 
 class ContentTooLargeError(AppError):

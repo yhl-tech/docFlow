@@ -66,6 +66,8 @@ export interface ParseDocxResponse {
   text: string
   equations: string[]
   filename: string
+  /** pandoc：公式与导出 Word 一致；docxlatex：兜底 */
+  parse_source?: 'pandoc' | 'docxlatex'
 }
 
 /**

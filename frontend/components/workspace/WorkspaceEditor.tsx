@@ -36,15 +36,6 @@ export function WorkspaceEditor() {
 
   return (
     <div className="relative z-0 flex flex-1 flex-col overflow-hidden bg-white">
-      {/* 标题栏 */}
-      <div className="flex flex-shrink-0 items-center justify-between border-b border-slate-100 bg-white px-5 py-3">
-        <h2 className="text-sm font-medium tracking-wide text-slate-600">创作工作台</h2>
-        <div className="flex items-center gap-1.5 text-xs text-slate-400">
-          <span className="inline-block h-1 w-1 rounded-full bg-slate-300" />
-          自动保存
-        </div>
-      </div>
-
       {/* 工具栏 */}
       <EditorRichToolbar
         editorRef={editorRef}
