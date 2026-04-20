@@ -47,7 +47,7 @@ class SMSService:
             return True
 
         try:
-            from alibabacloud_dysmsapi20170525 import Client
+            from alibabacloud_dysmsapi20170525.client import Client
             from alibabacloud_tea_openapi import models as open_api_models
             from alibabacloud_dysmsapi20170525 import models as dysms_models
 

@@ -50,7 +50,7 @@ export function WorkspaceUserMenu() {
 
   function handleLogout() {
     logout()
-    router.push('/login')
+    window.location.href = '/login'
   }
 
   if (!isLoggedIn || !user) {
@@ -112,11 +112,21 @@ export function WorkspaceUserMenu() {
           {/* 用户信息 */}
           <div className="px-3 py-2 border-b border-slate-100 mb-1">
             <p className="text-sm font-medium text-slate-800 truncate">{displayName}</p>
-            <p className="text-xs text-slate-400 truncate">
-              {user.quota_remaining > 0
-                ? `${user.quota_remaining} 次免费导出`
-                : `${user.balance_cents} 积分`}
-            </p>
+            {user.is_member_active ? (
+              <p className="text-xs text-indigo-500 truncate">
+                {'会员'}
+                {user.member_expires_at
+                  ? ` · 到期 ${new Date(user.member_expires_at).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}`
+                  : ''}
+              </p>
+            ) : (
+              <p className="text-xs text-slate-400 truncate">
+                {user.quota_remaining > 0 && `${user.quota_remaining} 次免费`}
+                {user.quota_remaining > 0 && user.balance_cents > 0 && ' · '}
+                {user.balance_cents > 0 && `${user.balance_cents} 积分`}
+                {user.quota_remaining === 0 && user.balance_cents === 0 && '无余额'}
+              </p>
+            )}
           </div>
 
           <DropdownMenu.Item

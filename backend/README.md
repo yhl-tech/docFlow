@@ -1,4 +1,4 @@
-# DS随心转 — 后端服务
+# DocFlow — 后端服务
 
 ## 环境要求
 
@@ -15,8 +15,10 @@
 ```bash
 conda create -n dssxz python=3.11 -y
 ```
+
 conda create -n docFlow python=3.11 -y
 conda activate docFlow
+
 ### 2. 安装依赖
 
 ```bash
@@ -29,6 +31,7 @@ pip install -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
 ```bash
 cp .env.example .env
 # 按需编辑 .env（开发环境默认 SQLite，无需额外配置）
+# 若前端使用 pay_channel=mock：需 DEBUG=true 且 ENABLE_MOCK_PAYMENT=true（见 .env.example）
 ```
 
 ### 4. 启动服务
@@ -39,24 +42,26 @@ conda activate dssxz
 cd d:\project\dssxz\code\backend
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
-# 改用 8001 端口
-nohup uvicorn app.main:app --host 0.0.0.0 --port 8001 > docflow.log 2>&1 &
 
+# 改用 8001 端口
+
+nohup uvicorn app.main:app --host 0.0.0.0 --port 8001 > docflow.log 2>&1 &
 
 # 先 kill 掉旧进程
-pkill -f "uvicorn.*8001"
+
+pkill -f "uvicorn.\*8001"
 
 # 再重新启动
-nohup uvicorn app.main:app --host 0.0.0.0 --port 8001 > docflow.log 2>&1 &
 
+nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > docflow.log 2>&1 &
 
 启动成功后访问：
 
-| 地址 | 说明 |
-|------|------|
-| http://localhost:8000/health | 健康检查 |
-| http://localhost:8000/docs | Swagger 接口文档 |
-| http://localhost:8000/redoc | ReDoc 接口文档 |
+| 地址                         | 说明             |
+| ---------------------------- | ---------------- |
+| http://localhost:8000/health | 健康检查         |
+| http://localhost:8000/docs   | Swagger 接口文档 |
+| http://localhost:8000/redoc  | ReDoc 接口文档   |
 
 ---
 

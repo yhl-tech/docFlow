@@ -28,6 +28,7 @@ import {
 import { useEditorStore } from "@/store/editorStore"
 import { useExport } from "@/hooks/useExport"
 import { MathFormulaDialog } from "./MathFormulaDialog"
+import { UpgradeModal } from "@/components/pricing/UpgradeModal"
 
 /* ─── 子组件 ─── */
 
@@ -245,7 +246,7 @@ export function EditorRichToolbar({
 }: EditorRichToolbarProps) {
   const { exportStatus, isFullscreen, toggleFullscreen, setUploadStatus } =
     useEditorStore()
-  const { exportDoc } = useExport()
+  const { exportDoc, upgradeModalOpen, setUpgradeModalOpen } = useExport()
   const isExporting = exportStatus === "loading"
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -455,6 +456,13 @@ export function EditorRichToolbar({
           )}
         </div>
       </div>
+
+      {/* 配额不足 / 余额不足时自动弹出的升级弹窗 */}
+      <UpgradeModal
+        open={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        initialTab="member"
+      />
     </div>
   )
 }

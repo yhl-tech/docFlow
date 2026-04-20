@@ -1,12 +1,28 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+# ==== 请求 ====
+
+PLAN_VALUES = Literal["monthly", "annual", "lifetime", "topup"]
+PAY_CHANNEL_VALUES = Literal["wechat", "alipay", "mock"]
 
 
 class CreateOrderRequest(BaseModel):
-    plan: str  # basic / pro / pack_50
-    pay_channel: str  # wechat / alipay
+    plan: PLAN_VALUES  # monthly / annual / lifetime / topup
+    pay_channel: PAY_CHANNEL_VALUES = "mock"  # wechat / alipay / mock
+    topup_amount: Optional[float] = Field(
+        default=None, ge=0.1, le=10_000, description="仅 topup 时使用，单位：元（0.1-10000）"
+    )
+
+
+class MockConfirmRequest(BaseModel):
+    order_no: str = Field(..., min_length=8, max_length=64)
+
+
+# ==== 响应 ====
 
 
 class OrderItem(BaseModel):
@@ -33,4 +49,6 @@ class OrderList(BaseModel):
 
 class CreateOrderResponse(BaseModel):
     order_no: str
-    pay_params: dict  # 微信/支付宝支付参数
+    amount: float
+    plan: str
+    pay_params: dict  # 包含 mock_enabled / pay_url / qr_code 等

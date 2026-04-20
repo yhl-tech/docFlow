@@ -56,3 +56,6 @@ Thumbs.db
 
 # OS
 .DS_Store
+
+# 微信支付证书（含私钥，绝不提交 git）
+certs/

@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { exportService, type ExportFormat } from '@/lib/api'
 import { useEditorStore } from '@/store/editorStore'
+import { useAuthStore } from '@/store/authStore'
 import { downloadBlob, extractFilename } from '@/lib/download'
 import { UpgradeModal } from '@/components/pricing/UpgradeModal'
 
@@ -50,14 +51,14 @@ const FILE_EXT: Record<ExportFormat, string> = {
 // 工具函数
 // ============================================================
 
-function handleApiError(error: unknown, fallbackMsg: string, onError?: (error: Error) => void): { message: string; code?: string } {
+async function handleApiError(error: unknown, fallbackMsg: string, onError?: (error: Error) => void): Promise<{ message: string; code?: string }> {
   const err = error as any
   let message = fallbackMsg
   let code: string | undefined
 
   if (err.response?.data instanceof Blob) {
     try {
-      const text = (err.response.data as Blob).text()
+      const text = await (err.response.data as Blob).text()
       const data = JSON.parse(text)
       message = data.error ?? fallbackMsg
       code = data.code
@@ -69,7 +70,13 @@ function handleApiError(error: unknown, fallbackMsg: string, onError?: (error: E
     message = '请求超时，文档可能过大，请稍后重试'
   }
 
-  toast.error(message)
+  const toastMsg = code === 'INSUFFICIENT_BALANCE'
+    ? '余额不足，请先充值'
+    : code === 'QUOTA_EXCEEDED'
+      ? '免费次数已用完，请充值后继续使用'
+      : message
+
+  toast.error(toastMsg, { duration: 2000 })
   onError?.(err)
   return { message, code }
 }
@@ -118,16 +125,16 @@ export function useExport(options: UseExportOptions = {}): UseExportReturn {
       const filename = extractFilename(content, FILE_EXT[format])
       downloadBlob(res.blob, filename)
       
+      // 导出成功后刷新用户信息（更新配额/余额显示）
+      useAuthStore.getState().refreshUser()
+      
       setExportStatus('success', '导出成功')
       toast.success(`已下载：${filename}`, { duration: 1500 })
       onSuccess?.(filename)
       return true
     } catch (error) {
-      const { message, code } = handleApiError(error, '导出失败，请重试', onError)
-      if (code === 'INSUFFICIENT_BALANCE' || code === 'QUOTA_EXCEEDED') {
-        setUpgradeModalOpen(true)
-      }
-      setExportStatus('error', '导出失败')
+      const { code } = await handleApiError(error, '导出失败，请重试', onError)
+      setExportStatus('error', code === 'INSUFFICIENT_BALANCE' || code === 'QUOTA_EXCEEDED' ? '余额不足' : '导出失败')
       return false
     }
   }, [content, template, exportStatus, validate, setExportStatus, onSuccess, onError])

@@ -68,12 +68,3 @@ class UserInfo(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
-
-
-class QuotaInfo(BaseModel):
-    """配额信息"""
-    plan: str
-    quota_total: int
-    quota_used: int
-    quota_remaining: int
-    quota_reset_at: Optional[datetime] = None

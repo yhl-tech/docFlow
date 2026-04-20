@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="DS随心转 API",
+    title="DocFlow API",
     description="AI 文档导出平台后端接口",
     version="1.0.0",
     docs_url="/docs",

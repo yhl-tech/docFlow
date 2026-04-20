@@ -42,8 +42,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   exportStatus: 'idle',
   exportMessage: '',
-  setExportStatus: (exportStatus, exportMessage = '') =>
-    set({ exportStatus, exportMessage }),
+  setExportStatus: (exportStatus, exportMessage = '') => {
+    set({ exportStatus, exportMessage })
+    if (exportStatus === 'success' || exportStatus === 'error') {
+      setTimeout(() => set({ exportStatus: 'idle', exportMessage: '' }), 2000)
+    }
+  },
 
   uploadStatus: 'idle',
   uploadMessage: '',

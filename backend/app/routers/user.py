@@ -9,14 +9,17 @@ from app.schemas.user import QuotaInfo
 router = APIRouter()
 
 
-@router.get("/quota", response_model=QuotaInfo, summary="查询剩余导出次数")
+@router.get("/quota", response_model=QuotaInfo, summary="查询剩余导出次数与会员状态")
 async def get_quota(current_user: CurrentUser):
     return QuotaInfo(
-        plan=current_user.plan,
         quota_total=current_user.quota_total,
         quota_used=current_user.quota_used,
         quota_remaining=current_user.quota_remaining,
         quota_reset_at=current_user.quota_reset_at,
+        balance_cents=current_user.balance_cents,
+        member_plan=current_user.member_plan,
+        member_expires_at=current_user.member_expires_at,
+        is_member_active=current_user.is_member_active,
     )
 
 
@@ -30,7 +33,7 @@ async def list_orders(
     offset = (page - 1) * size
 
     total_result = await db.execute(
-        select(func.count()).where(Order.user_id == current_user.id)
+        select(func.count()).select_from(Order).where(Order.user_id == current_user.id)
     )
     total = total_result.scalar_one()
 

@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -52,4 +53,7 @@ class User(Base):
             return True
         if self.member_expires_at is None:
             return False
-        return _utcnow() < self.member_expires_at
+        expires = self.member_expires_at
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        return _utcnow() < expires

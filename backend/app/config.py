@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     # 模拟支付（开发/测试用；生产环境务必关闭）
     ENABLE_MOCK_PAYMENT: bool = False
 
+    # 支付回调基础地址（用于内网穿透调试，如 ngrok；留空则使用 request.base_url）
+    PAYMENT_NOTIFY_BASE_URL: str = ""
+
     # 阿里云短信
     ALIYUN_ACCESS_KEY_ID: str = ""
     ALIYUN_ACCESS_KEY_SECRET: str = ""
@@ -52,6 +55,9 @@ class Settings(BaseSettings):
     WECHAT_APP_ID: str = ""
     WECHAT_API_V3_KEY: str = ""
     WECHAT_PRIVATE_KEY_PATH: str = ""
+    WECHAT_CERT_SERIAL_NO: str = ""    # 商户证书序列号
+    WECHAT_PUBLIC_KEY_ID: str = ""     # 微信支付公钥ID（PUB_KEY_ID_xxx）
+    WECHAT_PUBLIC_KEY_PATH: str = ""   # 微信支付公钥路径
 
     # 支付宝
     ALIPAY_APP_ID: str = ""
