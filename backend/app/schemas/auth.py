@@ -42,6 +42,13 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(..., min_length=6, max_length=32, description="新密码")
 
 
+class ResetPasswordRequest(BaseModel):
+    """重置密码请求（忘记密码）"""
+    phone: str = Field(..., description="手机号")
+    sms_code: str = Field(..., min_length=6, max_length=6, description="短信验证码")
+    new_password: str = Field(..., min_length=6, max_length=32, description="新密码")
+
+
 class TokenResponse(BaseModel):
     """Token 响应"""
     access_token: str

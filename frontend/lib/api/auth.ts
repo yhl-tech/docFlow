@@ -24,6 +24,12 @@ export interface SendSmsParams {
   type?: 'login' | 'register' | 'reset_password'
 }
 
+export interface ResetPasswordParams {
+  phone: string
+  sms_code: string
+  new_password: string
+}
+
 export interface TokenResponse {
   access_token: string
   token_type: string
@@ -116,11 +122,21 @@ class AuthService {
   }
 
   /**
-   * 保存 Token 到 localStorage
+   * 重置密码（忘记密码）
+   */
+  async resetPassword(params: ResetPasswordParams): Promise<MessageResponse> {
+    const response = await api.post<MessageResponse>('/api/auth/reset-password', params)
+    return response.data
+  }
+
+  /**
+   * 保存 Token 到 localStorage + cookie（供 middleware 读取）
    */
   saveToken(token: string): void {
     if (typeof window !== 'undefined') {
       localStorage.setItem('token', token)
+      // 同步写入 cookie，供 Edge middleware 路由守卫使用
+      document.cookie = `auth_token=${token}; path=/; max-age=${7 * 24 * 3600}; SameSite=Lax`
     }
   }
 
@@ -140,6 +156,8 @@ class AuthService {
   clearToken(): void {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('token')
+      // 同步清除 cookie
+      document.cookie = 'auth_token=; path=/; max-age=0'
     }
   }
 

@@ -1,10 +1,46 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { WorkspaceChat } from '@/components/workspace/WorkspaceChat'
 import { WorkspaceEditor } from '@/components/workspace/WorkspaceEditor'
 import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader'
+import authService from '@/lib/api/auth'
+import { useAuthStore } from '@/store/authStore'
 
 export default function WorkspacePage() {
+  const [canRender, setCanRender] = useState(false)
+
+  useEffect(() => {
+    const redirectToLogin = () => {
+      window.location.replace('/login?redirect=/workspace')
+    }
+
+    if (!authService.isLoggedIn()) {
+      redirectToLogin()
+      return
+    }
+
+    useAuthStore
+      .getState()
+      .refreshUser()
+      .then(() => {
+        if (!useAuthStore.getState().isLoggedIn) {
+          authService.clearToken()
+          redirectToLogin()
+          return
+        }
+        setCanRender(true)
+      })
+      .catch(() => {
+        authService.clearToken()
+        redirectToLogin()
+      })
+  }, [])
+
+  if (!canRender) {
+    return <div className="h-screen w-screen bg-white" />
+  }
+
   return (
     <div
       className="flex flex-col overflow-hidden bg-white"

@@ -97,6 +97,12 @@ export default function RegisterPage() {
   const [smsLoading, setSmsLoading] = useState(false)
 
   useEffect(() => {
+    if (authService.isLoggedIn()) {
+      window.location.replace('/workspace')
+    }
+  }, [])
+
+  useEffect(() => {
     if (countdown <= 0) return
     const timer = setInterval(() => setCountdown((prev) => prev - 1), 1000)
     return () => clearInterval(timer)

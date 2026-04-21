@@ -10,6 +10,7 @@ from app.schemas.auth import (
     ChangePasswordRequest,
     LoginRequest,
     RegisterRequest,
+    ResetPasswordRequest,
     SendSmsRequest,
     SmsLoginRequest,
     TokenResponse,
@@ -140,6 +141,38 @@ async def send_sms_code(body: SendSmsRequest, request: Request):
 
     except SMSServiceError as e:
         raise HTTPException(status_code=500, detail={"error": str(e), "code": "SMS_SERVICE_ERROR"})
+
+
+@router.post("/reset-password", response_model=MessageResponse, summary="重置密码（忘记密码）")
+@limiter.limit("10/hour")
+async def reset_password(body: ResetPasswordRequest, db: DB, request: Request):
+    """通过短信验证码重置密码"""
+    # 检查手机号格式
+    if not re.match(r"^1[3-9]\d{9}$", body.phone):
+        raise HTTPException(status_code=400, detail={"error": "手机号格式不正确", "code": "INVALID_PHONE"})
+
+    # 验证短信验证码
+    if not await sms_code_manager.verify_code(body.phone, body.sms_code, "reset_password"):
+        raise HTTPException(status_code=400, detail={"error": "验证码错误或已过期", "code": "INVALID_SMS_CODE"})
+
+    # 查找用户
+    result = await db.execute(select(User).where(User.phone == body.phone))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=400, detail={"error": "该手机号未注册", "code": "USER_NOT_FOUND"})
+
+    if not user.is_active:
+        raise HTTPException(status_code=400, detail={"error": "账号已被禁用", "code": "USER_DISABLED"})
+
+    # 更新密码
+    user.password = hash_password(body.new_password)
+    db.add(user)
+
+    # 删除已使用的验证码
+    await sms_code_manager.delete_code(body.phone, "reset_password", db)
+
+    return MessageResponse(message="密码重置成功，请使用新密码登录")
 
 
 @router.post("/logout", response_model=MessageResponse, summary="退出登录")
