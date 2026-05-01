@@ -16,11 +16,30 @@ from app.models.user import User
 from app.schemas.export import ExportRequest
 from app.services.ai_service import ai_service
 from app.services.export_service import PandocNotAvailableError, export_service
+from app.routers.editor import _builtin_templates
 
 router = APIRouter()
 
 # 每次导出的单次费用（单位：分，100 分 = 1 元）
 PER_EXPORT_CENTS = 100
+
+
+def _effective_template_binding(body: ExportRequest) -> dict | None:
+    """导出兜底：前端没带快照时，用内置模板 ID 补默认配置。"""
+    binding = body.template_binding
+    if binding and binding.get("configSnapshot"):
+        return binding
+    if not body.template or body.template == "default":
+        return binding
+    for template in _builtin_templates():
+        if template.id == body.template:
+            logger.warning(f"导出请求缺少模板快照，使用内置模板默认配置: {body.template}")
+            return {
+                "templateId": template.id,
+                "appliedAt": datetime.utcnow().isoformat(),
+                "configSnapshot": template.config,
+            }
+    return binding
 
 
 # ------------------------------------------------------------------ #
@@ -134,6 +153,13 @@ async def export_docx(
     - **模板** → 对应 reference-doc 样式（如存在）
     """
     char_count = len(body.markdown)
+    
+    # 调试：打印完整的请求体
+    import json
+    logger.info(f"[export_docx] 收到的请求体 keys: {list(body.model_dump().keys())}")
+    logger.info(f"[export_docx] body.template_binding = {body.template_binding}")
+    if body.template_binding:
+        logger.info(f"[export_docx] body.template_binding.configSnapshot keys: {list(body.template_binding.get('configSnapshot', {}).get('styles', {}).keys())}")
 
     # 记录本次导出的扣费方式，用于失败时对称退还
     deduction_type: list = []
@@ -142,12 +168,29 @@ async def export_docx(
     db_user = await _check_and_deduct_quota(current_user, db, deduction_type)
 
     # 2. 调用导出服务
-    logger.info(f"开始导出 docx, 字数={char_count}, template={body.template}, page_size={body.page_size}")
+    effective_template_binding = _effective_template_binding(body)
+    logger.info(
+        "开始导出 docx, 字数={}, template={}, page_size={}, has_template_binding={}".format(
+            char_count,
+            body.template,
+            body.page_size,
+            bool(effective_template_binding and effective_template_binding.get("configSnapshot")),
+        )
+    )
+    # 调试：打印接收到的 template_binding
+    if effective_template_binding and effective_template_binding.get("configSnapshot"):
+        styles = effective_template_binding["configSnapshot"].get("styles", {})
+        h1_bold = styles.get("heading_1", {}).get("bold", "NOT_FOUND")
+        logger.info(f"[export_docx] 接收到的 heading_1.bold = {h1_bold}")
+        logger.info(f"[export_docx] 接收到的 heading_1 配置 = {styles.get('heading_1', {})}")
+    else:
+        logger.info(f"[export_docx] template_binding = {effective_template_binding}")
     try:
         docx_bytes = await export_service.export_docx(
             markdown=body.markdown,
             template=body.template,
             page_size=body.page_size,
+            template_binding=effective_template_binding,
         )
     except PandocNotAvailableError as exc:
         if db_user:
@@ -220,11 +263,13 @@ async def export_pdf(
 
     # 2. 调用导出服务
     logger.info(f"开始导出 pdf, 字数={char_count}, template={body.template}, page_size={body.page_size}")
+    effective_template_binding = _effective_template_binding(body)
     try:
         pdf_bytes = await export_service.export_pdf(
             markdown=body.markdown,
             template=body.template,
             page_size=body.page_size,
+            template_binding=effective_template_binding,
         )
     except PandocNotAvailableError as exc:
         if db_user:

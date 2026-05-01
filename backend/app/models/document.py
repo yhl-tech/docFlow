@@ -15,6 +15,7 @@ class Document(Base):
     title: Mapped[str] = mapped_column(String(200), default="未命名文档")
     content: Mapped[str] = mapped_column(Text, default="")
     template: Mapped[str] = mapped_column(String(50), default="default")
+    template_binding_json: Mapped[str] = mapped_column(Text, default="")
     word_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

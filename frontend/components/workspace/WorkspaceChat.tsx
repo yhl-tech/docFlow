@@ -165,7 +165,7 @@ export function WorkspaceChat() {
     clearMessages,
   } = useAIStore()
 
-  const { setContent } = useEditorStore()
+  const { setContent, setPendingWordStyles } = useEditorStore()
 
   // 自动滚动到底部（仅滚动对话列表容器，不触发整页滚动）
   useEffect(() => {
@@ -242,11 +242,16 @@ export function WorkspaceChat() {
     const toastId = toast.loading('正在解析文档...')
 
     try {
-      // 调用后端 API 解析 Word 文档（包括公式）
+      // 调用后端 API 解析 Word 文档（包括公式和字符级样式）
       const result = await editorService.parseDocx(file)
 
-      // 将内容写入编辑器（延迟执行避免 flushSync 警告）
-      queueMicrotask(() => setContent(result.text))
+      // 合并状态更新：同时设置内容和 Word 样式，确保它们在同一次渲染中更新
+      // 避免竞争条件：setContent 和 setPendingWordStyles 分散调用可能导致应用时机不一致
+      useEditorStore.setState({
+        content: result.text,
+        pendingWordStyles: result.style_runs?.length ? result.style_runs : null,
+      })
+
       toast.success('文档已导入编辑器', { id: toastId })
 
       // 添加系统消息提示用户
@@ -265,7 +270,7 @@ export function WorkspaceChat() {
         fileInputRef.current.value = ''
       }
     }
-  }, [setContent, addMessage])
+  }, [setContent, setPendingWordStyles, addMessage])
 
   // 触发文件选择
   const triggerFileUpload = () => {

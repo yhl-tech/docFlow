@@ -58,7 +58,8 @@
   body {
     @apply bg-background text-foreground;
   }
-  html, body {
+  html,
+  body {
     height: 100%;
     overflow: hidden;
   }
@@ -77,28 +78,101 @@
   color: #9ca3af;
   pointer-events: none;
 }
-.editor-document h1 { font-size: 1.75rem; font-weight: 700; margin: 1rem 0 0.5rem; }
-.editor-document h2 { font-size: 1.375rem; font-weight: 700; margin: 0.875rem 0 0.5rem; }
-.editor-document h3 { font-size: 1.125rem; font-weight: 600; margin: 0.75rem 0 0.375rem; }
-.editor-document h4 { font-size: 1rem; font-weight: 600; margin: 0.625rem 0 0.25rem; }
-.editor-document p  { margin: 0.375rem 0; }
-.editor-document ul { list-style: disc; padding-left: 1.5rem; margin: 0.5rem 0; }
-.editor-document ol { list-style: decimal; padding-left: 1.5rem; margin: 0.5rem 0; }
+.editor-document h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 1rem 0 0.5rem;
+}
+.editor-document h2 {
+  font-size: 1.375rem;
+  font-weight: 700;
+  margin: 0.875rem 0 0.5rem;
+}
+.editor-document h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0.75rem 0 0.375rem;
+}
+.editor-document h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0.625rem 0 0.25rem;
+}
+.editor-document p {
+  margin: 0.375rem 0;
+}
+.editor-document ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+.editor-document ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
 .editor-document blockquote {
   border-left: 3px solid #3b82f6;
   padding-left: 1rem;
   color: #6b7280;
   margin: 0.5rem 0;
 }
-.editor-document table { border-collapse: collapse; width: 100%; margin: 0.75rem 0; }
+.editor-document table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.75rem 0;
+}
 .editor-document th,
-.editor-document td { border: 1px solid #e5e7eb; padding: 0.375rem 0.75rem; }
-.editor-document th { background: #f9fafb; font-weight: 600; }
-.editor-document code { background: #f3f4f6; padding: 0.125rem 0.375rem; border-radius: 4px; font-family: monospace; font-size: 0.875em; }
-.editor-document pre  { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 8px; overflow-x: auto; margin: 0.75rem 0; font-size: 0.8125rem; }
-.editor-document pre code { background: transparent; padding: 0; color: inherit; }
-.editor-document .katex-formula-block  { display: block; text-align: center; padding: 0.5rem; margin: 0.5rem 0; background: #f0f7ff; border-radius: 6px; border: 1px dashed #93c5fd; color: #2563eb; font-family: monospace; font-size: 0.875rem; }
-.editor-document .katex-formula-inline { display: inline; padding: 0 0.25rem; background: #f0f7ff; border-radius: 4px; color: #2563eb; font-family: monospace; font-size: 0.875rem; }
+.editor-document td {
+  border: 1px solid #e5e7eb;
+  padding: 0.375rem 0.75rem;
+}
+.editor-document th {
+  background: #f9fafb;
+  font-weight: 600;
+}
+.editor-document code {
+  background: #f3f4f6;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.875em;
+}
+.editor-document pre {
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 1rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+  font-size: 0.8125rem;
+}
+.editor-document pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+.editor-document .katex-formula-block {
+  display: block;
+  text-align: center;
+  padding: 0.5rem;
+  margin: 0.5rem 0;
+  background: #f0f7ff;
+  border-radius: 6px;
+  border: 1px dashed #93c5fd;
+  color: #2563eb;
+  font-family: monospace;
+  font-size: 0.875rem;
+}
+.editor-document .katex-formula-inline {
+  display: inline;
+  padding: 0 0.25rem;
+  background: #f0f7ff;
+  border-radius: 4px;
+  color: #2563eb;
+  font-family: monospace;
+  font-size: 0.875rem;
+}
 
 /* KaTeX 公式样式修正 */
 .katex-display {
@@ -172,12 +246,29 @@
 }
 
 /* 对话区 Markdown 浅色主题 */
-.chat-prose pre { background: #f8fafc; color: #334155; border: 1px solid #e2e8f0; }
-.chat-prose code { color: #6366f1; background: #eef2ff; }
-.chat-prose code::before, .chat-prose code::after { content: none; }
-.chat-prose strong { color: #1e293b; }
-.chat-prose a { color: #4f46e5; }
-.chat-prose blockquote { border-color: #6366f1; color: #64748b; }
+.chat-prose pre {
+  background: #f8fafc;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+}
+.chat-prose code {
+  color: #6366f1;
+  background: #eef2ff;
+}
+.chat-prose code::before,
+.chat-prose code::after {
+  content: none;
+}
+.chat-prose strong {
+  color: #1e293b;
+}
+.chat-prose a {
+  color: #4f46e5;
+}
+.chat-prose blockquote {
+  border-color: #6366f1;
+  color: #64748b;
+}
 
 /* Mermaid 图表容器 */
 .mermaid-container {
@@ -200,6 +291,98 @@
   @apply font-mono text-sm;
 }
 
+/* ─── 模板预览纸张层：读取 CSS 变量注入排版样式 ─── */
+.tpl-paper {
+  padding: var(--tpl-margin, 2.5rem 3rem);
+}
+/* TipTap 实际容器类是 .tiptap，不是 .tiptap-editor */
+.tpl-paper .tiptap {
+  font-family: var(--tpl-body-font, inherit);
+  font-size: var(--tpl-body-size, 0.9375rem);
+  font-weight: var(--tpl-body-weight, 400);
+  line-height: var(--tpl-body-line-height, 1.75);
+}
+.tpl-paper .tiptap p {
+  text-align: var(--tpl-body-align, left);
+  text-indent: var(--tpl-body-indent, 0);
+  margin-top: var(--tpl-paragraph-space-before, 0);
+  margin-bottom: var(--tpl-paragraph-space-after, 0.375rem);
+  font-weight: var(--tpl-body-weight, 400);
+}
+/* 通用 h1 样式 */
+.tpl-paper .tiptap h1 {
+  font-family: var(--tpl-h1-font, inherit);
+  font-size: var(--tpl-h1-size, 1.5rem);
+  font-weight: var(--tpl-h1-weight, 700);
+  text-align: var(--tpl-h1-align, left);
+}
+/* 文档标题 - 匹配 document-title 类名或 data-style-key="document_title" 属性 */
+.tpl-paper .document-title,
+.tpl-paper [data-style-key="document_title"] {
+  font-family: var(--tpl-title-font, inherit) !important;
+  font-size: var(--tpl-title-size, 1.75rem) !important;
+  font-weight: var(--tpl-title-weight, 700) !important;
+  text-align: var(--tpl-title-align, center) !important;
+  text-align-last: center !important;
+  display: block !important;
+  width: 100% !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  text-indent: 0 !important;
+}
+.tpl-paper .tiptap h2 {
+  font-family: var(--tpl-h2-font, inherit);
+  font-size: var(--tpl-h2-size, 1.25rem);
+  font-weight: var(--tpl-h2-weight, 700);
+  text-align: var(--tpl-h2-align, left);
+}
+.tpl-paper .tiptap h3 {
+  font-family: var(--tpl-h3-font, inherit);
+  font-size: var(--tpl-h3-size, 1.125rem);
+  font-weight: var(--tpl-h3-weight, 600);
+  text-align: var(--tpl-h3-align, left);
+}
+.tpl-paper .tiptap h4 {
+  font-family: var(--tpl-h4-font, inherit);
+  font-size: var(--tpl-h4-size, 1rem);
+  font-weight: var(--tpl-h4-weight, 600);
+  text-align: var(--tpl-h4-align, left);
+}
+.tpl-paper .tiptap h5 {
+  font-family: var(--tpl-h5-font, inherit);
+  font-size: var(--tpl-h5-size, 0.9375rem);
+  font-weight: var(--tpl-h5-weight, 600);
+  text-align: var(--tpl-h5-align, left);
+}
+/* 副标题（课题标题模板的 subject_info / document_subtitle） */
+.tpl-paper [data-style-key="subject_info"],
+.tpl-paper [data-style-key="document_subtitle"],
+.tpl-paper .document-subtitle {
+  font-family: var(--tpl-subtitle-font, inherit) !important;
+  font-size: var(--tpl-subtitle-size, 1rem) !important;
+  font-weight: var(--tpl-subtitle-weight, 400) !important;
+  text-align: var(--tpl-subtitle-align, left) !important;
+}
+
+/* ─── 模板设置面板滚动条：统一 1cm 宽 ─── */
+.template-panel-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+.template-panel-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.template-panel-scroll::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.template-panel-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+
 /* ─── TipTap WYSIWYG 编辑器样式 ─── */
 .tiptap-editor {
   min-height: 600px;
@@ -218,25 +401,63 @@
   height: 0;
 }
 
-/* 标题 */
-.tiptap-editor h1 { font-size: 1.75rem; font-weight: 700; margin: 1.25rem 0 0.5rem; line-height: 1.3; }
-.tiptap-editor h2 { font-size: 1.375rem; font-weight: 700; margin: 1rem 0 0.5rem; line-height: 1.35; }
-.tiptap-editor h3 { font-size: 1.125rem; font-weight: 600; margin: 0.875rem 0 0.375rem; }
-.tiptap-editor h4 { font-size: 1rem;     font-weight: 600; margin: 0.75rem 0 0.25rem; }
+/* 标题 - 基础样式，模板样式会覆盖 */
+.tiptap-editor h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 1.25rem 0 0.5rem;
+  line-height: 1.3;
+}
+.tiptap-editor h2 {
+  font-size: 1.375rem;
+  font-weight: 700;
+  margin: 1rem 0 0.5rem;
+  line-height: 1.35;
+}
+.tiptap-editor h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0.875rem 0 0.375rem;
+}
+.tiptap-editor h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0.75rem 0 0.25rem;
+}
 
 /* 段落 */
-.tiptap-editor p { margin: 0.375rem 0; }
+.tiptap-editor p {
+  margin: 0.375rem 0;
+}
 
 /* 加粗/斜体/下划线/删除线 */
-.tiptap-editor strong { font-weight: 700; }
-.tiptap-editor em     { font-style: italic; }
-.tiptap-editor u      { text-decoration: underline; }
-.tiptap-editor s      { text-decoration: line-through; }
+.tiptap-editor strong {
+  font-weight: 700;
+}
+.tiptap-editor em {
+  font-style: italic;
+}
+.tiptap-editor u {
+  text-decoration: underline;
+}
+.tiptap-editor s {
+  text-decoration: line-through;
+}
 
 /* 列表 */
-.tiptap-editor ul { list-style: disc;    padding-left: 1.5rem; margin: 0.5rem 0; }
-.tiptap-editor ol { list-style: decimal; padding-left: 1.5rem; margin: 0.5rem 0; }
-.tiptap-editor li { margin: 0.2rem 0; }
+.tiptap-editor ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+.tiptap-editor ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+.tiptap-editor li {
+  margin: 0.2rem 0;
+}
 
 /* 引用块 */
 .tiptap-editor blockquote {
@@ -252,7 +473,7 @@
   background: #f3f4f6;
   padding: 0.125rem 0.375rem;
   border-radius: 4px;
-  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
   font-size: 0.875em;
   color: #e11d48;
 }
@@ -311,3 +532,5 @@
   border-top: 1px solid #e5e7eb;
   margin: 1.25rem 0;
 }
+
+/* 模板样式定义见上方（行 293-357），避免重复定义覆盖内联样式 */

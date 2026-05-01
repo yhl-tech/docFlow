@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useCallback, useState } from 'react'
+import React, { useEffect, useRef, useCallback, useState, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -17,11 +17,14 @@ import { Minimize2 } from 'lucide-react'
 import { useEditorStore } from '@/store/editorStore'
 import { aiService } from '@/lib/api'
 import { KaTeXNode } from './extensions/KaTeXNode'
+import StyleKeyExtension from './extensions/StyleKeyExtension'
+import { WordStyleApplierPlugin } from './extensions/WordStyleApplier'
+import FontFamily from '@tiptap/extension-font-family'
 import { FloatingAIToolbar } from './FloatingAIToolbar'
 
 /**
- * 将各种 AI 输出的非标准公式定界符统一转为 $$...$$
- * 在 DOM paste 拦截层调用，确保 tiptap-markdown 始终拿到规范的 Markdown
+ * style-key 标记逻辑已迁移到 StyleKeyExtension（MutationObserver 方案）。
+ * 这里只保留工具函数。
  */
 function preprocessMath(text: string): string {
   // 统一换行符（Windows 剪贴板可能是 CRLF）
@@ -37,6 +40,11 @@ function preprocessMath(text: string): string {
   return s
 }
 
+/** 直接调用 startTracking */
+function debounceStyleKey(editor: Editor) {
+  editor.commands.startTracking()
+}
+
 interface TipTapEditorProps {
   /** 编辑器实例就绪时回调，供工具栏拿到 Editor 实例 */
   onReady?: (editor: Editor) => void
@@ -44,8 +52,105 @@ interface TipTapEditorProps {
   onEditFormula?: (latex: string, displayMode: boolean, pos: number) => void
 }
 
+/* 将模板配置映射为编辑区 CSS 变量 */
+function buildTemplateStyle(config: import('@/types/editor-template').TemplateConfig | null): React.CSSProperties {
+  // 当 config 为 null 时，使用默认 CSS 变量
+  if (!config) {
+    return {
+      '--tpl-title-size': '1.5rem',
+      '--tpl-title-weight': '700',
+      '--tpl-title-align': 'center',
+      '--tpl-h1-size': '1.25rem',
+      '--tpl-h1-align': 'left',
+      '--tpl-h2-align': 'left',
+      '--tpl-h3-align': 'left',
+      '--tpl-h4-align': 'left',
+      '--tpl-h5-align': 'left',
+      '--tpl-body-weight': '400',
+      '--tpl-body-align': 'left',
+    } as React.CSSProperties
+  }
+  const { styles, layout } = config
+  const body = styles?.body ?? {}
+  const h1 = styles?.heading_1 ?? {}
+  const h2 = styles?.heading_2 ?? {}
+  const h3 = styles?.heading_3 ?? {}
+  const h4 = styles?.heading_4 ?? {}
+  const h5 = styles?.heading_5 ?? {}
+  const title = styles?.document_title ?? {}
+  const subtitle = styles?.document_subtitle ?? styles?.subject_info ?? {}
+
+  const FONT_ID_MAP: Record<string, string> = {
+    FangSong_GB2312: '"仿宋_GB2312", "FangSong", serif',
+    FangSong: '"FangSong", "仿宋", serif',
+    STFangsong: '"STFangsong", "华文仿宋", serif',
+    SimHei: '"SimHei", "黑体", sans-serif',
+    HuaWenHeiTi: '"HuaWenHeiTi", "华文黑体", "SimHei", "黑体", sans-serif',
+    DengXian: '"DengXian", "等线", sans-serif',
+    KaiTi_GB2312: '"KaiTi_GB2312", "KaiTi", "楷体", serif',
+    KaiTi: '"KaiTi", "楷体", serif',
+    STKaiti: '"STKaiti", "华文楷体", serif',
+    FZXiaoBiaoSong: '"FZXiaoBiaoSong", "方正小标宋", serif',
+    SimSun: '"SimSun", "宋体", serif',
+    NSimSun: '"NSimSun", "新宋体", serif',
+    STSong: '"STSong", "华文宋体", serif',
+    STZhongsong: '"STZhongsong", "华文中宋", serif',
+    'Microsoft YaHei': '"Microsoft YaHei", "微软雅黑", sans-serif',
+  }
+  const fontVar = (id?: string) => (id ? (FONT_ID_MAP[id] ?? id) : undefined)
+
+  const result = {
+    '--tpl-body-font': fontVar(body.fontFamily) ?? 'inherit',
+    '--tpl-body-size': body.fontSizePt ? `${body.fontSizePt}pt` : undefined,
+    '--tpl-body-weight': body.bold ? '700' : '400',
+    '--tpl-body-align': body.align ?? 'left',
+    '--tpl-body-line-height': (layout?.defaultLineHeight ?? body.lineHeight)?.toString() ?? undefined,
+    '--tpl-body-indent': `${(layout?.defaultFirstLineIndentChars ?? body.firstLineIndentChars ?? 0)}em`,
+    '--tpl-paragraph-space-before': `${layout?.defaultParagraphSpacingBeforePt ?? 0}pt`,
+    '--tpl-paragraph-space-after': `${layout?.defaultParagraphSpacingAfterPt ?? 0}pt`,
+    '--tpl-title-font': fontVar(title.fontFamily) ?? 'inherit',
+    '--tpl-title-size': title.fontSizePt ? `${title.fontSizePt}pt` : undefined,
+    '--tpl-title-align': title.align ?? 'center',
+    '--tpl-title-weight': title.bold ? '700' : '400',
+    '--tpl-subtitle-font': fontVar(subtitle.fontFamily) ?? 'inherit',
+    '--tpl-subtitle-size': subtitle.fontSizePt ? `${subtitle.fontSizePt}pt` : undefined,
+    '--tpl-subtitle-align': subtitle.align ?? 'center',
+    '--tpl-subtitle-weight': subtitle.bold ? '700' : '400',
+    '--tpl-h1-font': fontVar(h1.fontFamily) ?? 'inherit',
+    '--tpl-h1-size': h1.fontSizePt ? `${h1.fontSizePt}pt` : undefined,
+    '--tpl-h1-weight': h1.bold ? '700' : '400',
+    '--tpl-h1-align': h1.align ?? 'left',
+    '--tpl-h2-font': fontVar(h2.fontFamily) ?? 'inherit',
+    '--tpl-h2-size': h2.fontSizePt ? `${h2.fontSizePt}pt` : undefined,
+    '--tpl-h2-weight': h2.bold ? '700' : '400',
+    '--tpl-h2-align': h2.align ?? 'left',
+    '--tpl-h3-font': fontVar(h3.fontFamily) ?? 'inherit',
+    '--tpl-h3-size': h3.fontSizePt ? `${h3.fontSizePt}pt` : undefined,
+    '--tpl-h3-weight': h3.bold ? '700' : '400',
+    '--tpl-h3-align': h3.align ?? 'left',
+    '--tpl-h4-font': fontVar(h4.fontFamily) ?? 'inherit',
+    '--tpl-h4-size': h4.fontSizePt ? `${h4.fontSizePt}pt` : undefined,
+    '--tpl-h4-weight': h4.bold ? '700' : '400',
+    '--tpl-h4-align': h4.align ?? 'left',
+    '--tpl-h5-font': fontVar(h5.fontFamily) ?? 'inherit',
+    '--tpl-h5-size': h5.fontSizePt ? `${h5.fontSizePt}pt` : undefined,
+    '--tpl-h5-weight': h5.bold ? '700' : '400',
+    '--tpl-h5-align': h5.align ?? 'left',
+    '--tpl-margin': layout ? `${layout.marginTopMm ?? 25}mm ${layout.marginRightMm ?? 20}mm ${layout.marginBottomMm ?? 25}mm ${layout.marginLeftMm ?? 20}mm` : undefined,
+  } as React.CSSProperties
+
+  return result
+}
+
 export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
-  const { content, setContent, isFullscreen, setFullscreen } = useEditorStore()
+  const { content, setContent, isFullscreen, setFullscreen, templatePanelOpen, draftTemplateConfig, templateBinding, setEditorInstance, pendingWordStyles, setPendingWordStyles } = useEditorStore()
+  // 使用 useMemo 确保响应式更新
+  const previewConfig = useMemo(() => {
+    if (templatePanelOpen && draftTemplateConfig) {
+      return draftTemplateConfig
+    }
+    return templateBinding?.configSnapshot ?? null
+  }, [templatePanelOpen, draftTemplateConfig, templateBinding])
   const [isRewriting, setIsRewriting] = useState(false)
   // 防止外部更新 content 时触发死循环
   const skipUpdate = useRef(false)
@@ -117,6 +222,9 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
         inline: true,
         onEditFormula: stableEditCallback,
       }),
+      FontFamily,
+      StyleKeyExtension,
+      WordStyleApplierPlugin,
     ],
     editorProps: {
       attributes: {
@@ -127,15 +235,54 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
       if (skipUpdate.current) return
       const md = (editor.storage as any).markdown.getMarkdown()
       setContent(md)
+      // 防抖重新计算 style-key（文档结构变化时才需要）
+      debounceStyleKey(editor)
     },
     onCreate({ editor }) {
+      // 为文档标题段落添加 class（支持 p 和 h1）
+      // 为副标题添加 class（第二个段落）
+      // 必须放在 setContent 之前，因为 setContent 之后可能延迟渲染
+      const markDocumentTitle = () => {
+        const dom = editor.view.dom as HTMLElement
+        if (!dom) return
+        // 优先查找 h1（Markdown # 标题格式）
+        const firstH1 = dom.querySelector('h1:first-of-type')
+        if (firstH1) {
+          firstH1.classList.add('document-title')
+        } else {
+          const firstP = dom.querySelector('p:first-of-type')
+          if (firstP) {
+            firstP.classList.add('document-title')
+          }
+        }
+        // 标记副标题（第二个段落）
+        const blocks = dom.querySelectorAll(':scope > p, :scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6')
+        if (blocks.length >= 2) {
+          const secondBlock = blocks[1]
+          if (!secondBlock.classList.contains('document-title')) {
+            secondBlock.classList.add('document-subtitle')
+          }
+        }
+      }
+
       // 初始化时从 store 加载内容
       if (content) {
         skipUpdate.current = true
         editor.commands.setContent(content)
         skipUpdate.current = false
+        // 内容加载后计算 style-key 并标记
+        setTimeout(() => {
+          markDocumentTitle()
+        }, 100)
+      } else {
+        // 无内容时直接标记
+        setTimeout(() => {
+          markDocumentTitle()
+        }, 100)
       }
+
       editorRef.current = editor
+      setEditorInstance(editor)
       onReady?.(editor)
     },
   })
@@ -153,8 +300,59 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
       skipUpdate.current = true
       editor.commands.setContent(content)
       skipUpdate.current = false
+      // 内容加载后等待渲染完成再标记
+      setTimeout(() => {
+        const dom = editor.view.dom as HTMLElement
+        if (!dom) return
+        const firstH1 = dom.querySelector('h1:first-of-type')
+        if (firstH1) {
+          firstH1.classList.add('document-title')
+        } else {
+          const firstP = dom.querySelector('p:first-of-type')
+          if (firstP) {
+            firstP.classList.add('document-title')
+          }
+        }
+        // 标记副标题（第二个段落）
+        const blocks = dom.querySelectorAll(':scope > p, :scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6')
+        if (blocks.length >= 2) {
+          const secondBlock = blocks[1]
+          if (!secondBlock.classList.contains('document-title')) {
+            secondBlock.classList.add('document-subtitle')
+          }
+        }
+      }, 100)
     }
   }, [content]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Word 样式应用：content 加载后触发 WordStyleApplier 插件
+  // 监听 content 和 pendingWordStyles 两者，确保样式在内容稳定后应用
+  useEffect(() => {
+    if (!editor || editor.isDestroyed || !pendingWordStyles?.length) return
+
+    // 等待一小段时间确保 setContent 已经完全应用
+    const timer = setTimeout(() => {
+      // 再次检查 editor 状态和 style 数据
+      if (!editor || editor.isDestroyed) return
+      
+      // 获取当前文档文本，验证内容已稳定
+      const currentDoc = editor.state.doc
+      const docText = currentDoc.textContent
+      
+      // 如果文档为空或非常短（内容可能还没加载完），跳过本次
+      // 内容太短可能是 setContent 还在进行中
+      if (docText.length < 10 && content.length > 10) {
+        return
+      }
+
+      const tr = editor.state.tr.setMeta('applyWordStyles', pendingWordStyles)
+      editor.view.dispatch(tr)
+      // 消费后清空，防止重复应用
+      setPendingWordStyles(null)
+    }, 200) // 200ms 延迟确保 setContent 完全应用
+
+    return () => clearTimeout(timer)
+  }, [content, pendingWordStyles, editor, setPendingWordStyles])
 
   // 拦截粘贴事件：把非标准公式定界符（\[...\]、[...]等）预处理为 $$...$$
   // 在 capture 阶段运行，早于 tiptap-markdown 的粘贴插件。
@@ -219,6 +417,8 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
   }, [isFullscreen, setFullscreen])
 
   // 全屏层内容（当 isFullscreen 为 true 时通过 Portal 渲染到 body）
+  const templateStyle = buildTemplateStyle(previewConfig)
+
   const fullscreenLayer = (
     <div className="fixed inset-0 z-[9999] bg-white">
       {/* 顶部工具栏 */}
@@ -234,7 +434,7 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
       </div>
 
       <div className="h-full flex items-center justify-center p-8 pt-16">
-        <div className="max-w-4xl w-full h-full rounded-lg border border-slate-200/80 bg-white shadow-lg p-8">
+        <div ref={containerRef} id="editor-root" className="max-w-4xl w-full h-full rounded-lg border border-slate-200/80 bg-white shadow-lg p-8 tpl-paper" style={templateStyle}>
           <EditorContent editor={editor} />
         </div>
       </div>
@@ -250,8 +450,11 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
 
   // 非全屏时的普通编辑区
   const normalEditor = (
-    <div ref={containerRef} className="editor-scroll relative h-full overflow-y-auto bg-slate-100/60 px-6 py-6">
-      <div className="mx-auto min-h-full max-w-[680px] rounded-sm border border-slate-200/80 bg-white px-12 py-10 shadow-sm">
+    <div ref={containerRef} id="editor-root" className="editor-scroll relative h-full overflow-y-auto bg-slate-100/60 px-6 py-6">
+      <div
+        className="mx-auto min-h-full max-w-[680px] rounded-sm border border-slate-200/80 bg-white shadow-sm tpl-paper"
+        style={templateStyle}
+      >
         <EditorContent editor={editor} />
       </div>
       <FloatingAIToolbar

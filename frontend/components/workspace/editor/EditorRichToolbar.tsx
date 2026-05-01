@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, type RefObject } from "react"
+import { useState, useRef, useEffect, type RefObject } from "react"
 import { toast } from "sonner"
 import type { Editor } from "@tiptap/react"
 import {
@@ -24,10 +24,13 @@ import {
   FileSpreadsheet,
   FileImage,
   FileDown,
+  LayoutTemplate,
 } from "lucide-react"
 import { useEditorStore } from "@/store/editorStore"
 import { useExport } from "@/hooks/useExport"
+import { editorService } from "@/lib/api/editor"
 import { MathFormulaDialog } from "./MathFormulaDialog"
+import { TemplatePanel } from "./TemplatePanel"
 import { UpgradeModal } from "@/components/pricing/UpgradeModal"
 
 /* ─── 子组件 ─── */
@@ -244,11 +247,33 @@ export function EditorRichToolbar({
   editingFormula,
   onClearEdit,
 }: EditorRichToolbarProps) {
-  const { exportStatus, isFullscreen, toggleFullscreen, setUploadStatus } =
-    useEditorStore()
+  const {
+    exportStatus,
+    isFullscreen,
+    toggleFullscreen,
+    setUploadStatus,
+    currentTemplate,
+    templates,
+    setTemplates,
+    setAvailableFonts,
+    setCurrentTemplate,
+    openTemplatePanel,
+  } = useEditorStore()
   const { exportDoc, upgradeModalOpen, setUpgradeModalOpen } = useExport()
   const isExporting = exportStatus === "loading"
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  /* 首次挂载时预拉取模板列表，确保面板打开时有数据 */
+  useEffect(() => {
+    if (templates.length > 0) return
+    Promise.all([editorService.getTemplates(), editorService.getFonts()])
+      .then(([tpls, fonts]) => {
+        setTemplates(tpls as any)
+        setAvailableFonts(fonts)
+        // 不自动选中默认模板，由用户主动选择
+      })
+      .catch(() => {/* 静默失败，面板打开时再重试 */})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 图片上传处理
   function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -432,30 +457,48 @@ export function EditorRichToolbar({
         </div>
       </div>
 
-      {/* ── 第二行：导出 ── */}
+      {/* ── 第二行：导出 + 模板 ── */}
       <div className="relative flex items-center justify-center gap-2 border-t border-slate-50 px-3 py-1.5 bg-white">
         <span className="text-xs text-amber-600 font-medium">直接粘贴大模型生成文字到下方</span>
         <div className="absolute right-3 flex items-center gap-1.5">
-          {EXPORT_BTNS.map(
-            ({ format, label, className, title }) => (
-              <button
-                key={format}
-                onClick={() => exportDoc(format)}
-                disabled={isExporting}
-                title={title}
-                className={`
-                flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1.5
-                text-xs font-medium text-slate-700 transition-all hover:bg-slate-200
-                disabled:cursor-not-allowed disabled:opacity-50
-                ${className}
-              `}
-              >
-                <span>{label}</span>
-              </button>
-            ),
-          )}
+          {/* 模板设置入口 */}
+          <button
+            onClick={openTemplatePanel}
+            title="排版设置"
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition-all hover:bg-slate-50"
+          >
+            <LayoutTemplate className="h-3.5 w-3.5" />
+            {currentTemplate ? (
+              <span className="max-w-[80px] truncate">{currentTemplate.name}</span>
+            ) : (
+              <span>选择模板</span>
+            )}
+          </button>
+
+          <div className="h-4 w-px bg-slate-200" />
+
+          {/* 导出按钮 */}
+          {EXPORT_BTNS.map(({ format, label, className, title }) => (
+            <button
+              key={format}
+              onClick={() => exportDoc(format)}
+              disabled={isExporting}
+              title={title}
+              className={`
+              flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1.5
+              text-xs font-medium text-slate-700 transition-all hover:bg-slate-200
+              disabled:cursor-not-allowed disabled:opacity-50
+              ${className}
+            `}
+            >
+              <span>{label}</span>
+            </button>
+          ))}
         </div>
       </div>
+
+      {/* 模板设置面板 */}
+      <TemplatePanel />
 
       {/* 配额不足 / 余额不足时自动弹出的升级弹窗 */}
       <UpgradeModal

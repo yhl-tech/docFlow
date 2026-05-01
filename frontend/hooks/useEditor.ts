@@ -2,7 +2,9 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { toast } from 'sonner'
-import { editorService, type Template, type DocumentMeta } from '@/lib/api'
+import { editorService, type DocumentMeta } from '@/lib/api'
+import type { TemplateBinding } from '@/types/editor-template'
+import { useEditorStore } from '@/store/editorStore'
 
 // ============================================================
 // 类型定义
@@ -32,7 +34,7 @@ export interface UseEditorState {
 
 export interface UseEditorActions {
   /** 保存文档 */
-  saveDocument: (content: string, title?: string, template?: Template) => Promise<DocumentMeta | null>
+  saveDocument: (content: string, title?: string, template?: string, templateBinding?: TemplateBinding | null) => Promise<DocumentMeta | null>
   /** 加载文档 */
   loadDocument: (id: string) => Promise<string | null>
   /** 删除文档 */
@@ -48,7 +50,7 @@ export interface UseEditorActions {
   /** 验证 LaTeX */
   validateLatex: (latex: string) => Promise<{ valid: boolean; error?: string }>
   /** 应用模板 */
-  applyTemplate: (template: Template, content: string) => Promise<string | null>
+  applyTemplate: (template: string, content: string) => Promise<string | null>
   /** 生成目录 */
   generateToc: (content: string) => Promise<{ level: number; text: string; anchor: string }[]>
 }
@@ -94,6 +96,12 @@ export function useEditor(options: EditorOptions = {}): UseEditorReturn {
   const [isUploading, setIsUploading] = useState(false)
   const [saveStatus, setSaveStatus] = useState<UseEditorState['saveStatus']>('idle')
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
+  const {
+    setCurrentDocumentId,
+    setTemplateBinding,
+    setTemplates,
+    setCurrentTemplate,
+  } = useEditorStore()
 
   // ------------------- Refs -------------------
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -105,14 +113,15 @@ export function useEditor(options: EditorOptions = {}): UseEditorReturn {
   const saveDocument = useCallback(async (
     content: string,
     title?: string,
-    template?: Template
+    template?: string,
+    templateBinding?: TemplateBinding | null
   ): Promise<DocumentMeta | null> => {
     setIsSaving(true)
     setSaveStatus('saving')
     latestContentRef.current = content
 
     try {
-      const res = await editorService.saveDocument({ content, title, template })
+      const res = await editorService.saveDocument({ content, title, template, templateBinding })
       const doc: DocumentMeta = {
         id: res.id,
         title: title || '未命名',
@@ -120,6 +129,8 @@ export function useEditor(options: EditorOptions = {}): UseEditorReturn {
         updatedAt: res.savedAt,
         wordCount: res.wordCount,
       }
+      setCurrentDocumentId(doc.id)
+      setTemplateBinding(templateBinding ?? null)
       setSaveStatus('saved')
       setLastSavedAt(res.savedAt)
       onSaved?.(doc)
@@ -137,6 +148,14 @@ export function useEditor(options: EditorOptions = {}): UseEditorReturn {
   const loadDocument = useCallback(async (id: string): Promise<string | null> => {
     try {
       const res = await editorService.loadDocument(id)
+      setCurrentDocumentId(id)
+      setTemplateBinding(res.templateBinding ?? null)
+      if (res.templateBinding?.templateId) {
+        const templates = await editorService.getTemplates()
+        setTemplates(templates as any)
+        const matched = templates.find((item) => item.id === res.templateBinding?.templateId)
+        setCurrentTemplate((matched ?? null) as any)
+      }
       latestContentRef.current = res.content
       toast.success('文档加载成功')
       return res.content
@@ -242,7 +261,7 @@ export function useEditor(options: EditorOptions = {}): UseEditorReturn {
 
   /** 应用模板 */
   const applyTemplate = useCallback(async (
-    template: Template,
+    template: string,
     content: string
   ): Promise<string | null> => {
     try {

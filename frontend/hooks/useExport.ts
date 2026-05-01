@@ -95,7 +95,14 @@ async function handleApiError(error: unknown, fallbackMsg: string, onError?: (er
  */
 export function useExport(options: UseExportOptions = {}): UseExportReturn {
   const { onSuccess, onError } = options
-  const { content, template, exportStatus, setExportStatus } = useEditorStore()
+  const {
+    content,
+    currentTemplate,
+    templateBinding,
+    exportStatus,
+    setExportStatus,
+    getPreviewTemplateConfig,
+  } = useEditorStore()
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
 
   /** 导出校验 */
@@ -121,7 +128,52 @@ export function useExport(options: UseExportOptions = {}): UseExportReturn {
     setExportStatus('loading', '导出中，请稍候...')
 
     try {
-      const res = await exportService.export(format, { markdown: content, template })
+      const previewConfig = getPreviewTemplateConfig()
+      const templateId = currentTemplate?.id ?? templateBinding?.templateId
+
+      // 构建有效的模板绑定：
+      // 1. 如果有预览配置（模板面板已打开且有草稿），使用预览配置
+      // 2. 如果模板绑定有 configSnapshot，直接使用
+      // 3. 如果有当前模板但没有快照，使用当前模板配置作为快照
+      let effectiveTemplateBinding: typeof templateBinding = templateBinding
+      if (previewConfig && templateId) {
+        // 模板面板有草稿配置，优先使用
+        effectiveTemplateBinding = {
+          templateId,
+          appliedAt: templateBinding?.appliedAt ?? new Date().toISOString(),
+          configSnapshot: previewConfig,
+        }
+      } else if (templateId && !templateBinding?.configSnapshot && currentTemplate?.config) {
+        // 有当前模板但没有快照，使用当前模板配置作为快照
+        effectiveTemplateBinding = {
+          templateId,
+          appliedAt: new Date().toISOString(),
+          configSnapshot: currentTemplate.config,
+        }
+      }
+
+      // 调试日志：显示完整的样式配置
+      console.log('[useExport] 导出配置:', {
+        templateId,
+        previewConfig: previewConfig?.styles,
+        effectiveBindingSnapshot: effectiveTemplateBinding?.configSnapshot?.styles,
+        heading_1_bold_preview: previewConfig?.styles?.heading_1?.bold,
+        heading_1_bold_binding: effectiveTemplateBinding?.configSnapshot?.styles?.heading_1?.bold,
+      })
+
+      // 调试：打印完整的 API 请求 payload
+      const apiPayload = {
+        markdown: content,
+        template: templateId,
+        templateBinding: effectiveTemplateBinding,
+      }
+      console.log('[useExport] API 请求 payload:', JSON.stringify(apiPayload, null, 2))
+
+      const res = await exportService.export(format, {
+        markdown: content,
+        template: templateId,
+        templateBinding: effectiveTemplateBinding,
+      })
       const filename = extractFilename(content, FILE_EXT[format])
       downloadBlob(res.blob, filename)
       
@@ -137,7 +189,7 @@ export function useExport(options: UseExportOptions = {}): UseExportReturn {
       setExportStatus('error', code === 'INSUFFICIENT_BALANCE' || code === 'QUOTA_EXCEEDED' ? '余额不足' : '导出失败')
       return false
     }
-  }, [content, template, exportStatus, validate, setExportStatus, onSuccess, onError])
+  }, [content, currentTemplate, templateBinding, exportStatus, validate, setExportStatus, getPreviewTemplateConfig, onSuccess, onError])
 
   // 便捷方法
   const exportToDocx = useCallback(() => exportDoc('docx'), [exportDoc])

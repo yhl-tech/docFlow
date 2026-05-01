@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import event, text
+from sqlalchemy import event, inspect, text
 
 from app.config import settings
 
@@ -47,5 +47,18 @@ async def get_db() -> AsyncSession:
 async def init_db() -> None:
     """创建所有数据表（仅开发/测试用，生产环境用 Alembic 迁移）"""
     async with engine.begin() as conn:
-        from app.models import user, record, order, document, sms_code  # noqa: F401 确保模型已注册
+        from app.models import user, record, order, document, sms_code, document_template  # noqa: F401 确保模型已注册
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_ensure_editor_schema)
+
+
+def _ensure_editor_schema(sync_conn) -> None:
+    inspector = inspect(sync_conn)
+    tables = set(inspector.get_table_names())
+
+    if "documents" in tables:
+        columns = {col["name"] for col in inspector.get_columns("documents")}
+        if "template_binding_json" not in columns:
+            sync_conn.execute(
+                text("ALTER TABLE documents ADD COLUMN template_binding_json TEXT DEFAULT ''")
+            )

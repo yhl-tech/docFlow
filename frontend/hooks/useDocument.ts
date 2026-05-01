@@ -2,7 +2,9 @@
 
 import { useState, useCallback } from 'react'
 import { toast } from 'sonner'
-import { editorService, type Template, type DocumentMeta } from '@/lib/api'
+import { editorService, type DocumentMeta } from '@/lib/api'
+import type { TemplateBinding } from '@/types/editor-template'
+import { useEditorStore } from '@/store/editorStore'
 
 // ============================================================
 // 类型定义
@@ -40,7 +42,7 @@ export interface UseDocumentActions {
   /** 加载文档 */
   loadDocument: (id: string) => Promise<boolean>
   /** 保存文档 */
-  saveDocument: (content: string, title?: string, template?: Template) => Promise<boolean>
+  saveDocument: (content: string, title?: string, template?: string, templateBinding?: TemplateBinding | null) => Promise<boolean>
   /** 删除文档 */
   deleteDocument: (id: string) => Promise<boolean>
   /** 创建新文档 */
@@ -82,6 +84,12 @@ function handleApiError(error: unknown, fallbackMsg: string, onError?: (error: E
  */
 export function useDocument(options: UseDocumentOptions = {}): UseDocumentReturn {
   const { onSaved, onLoaded, onDeleted, onError } = options
+  const {
+    setCurrentDocumentId,
+    setTemplateBinding,
+    setTemplates,
+    setCurrentTemplate,
+  } = useEditorStore()
 
   // ------------------- 状态 -------------------
   const [documents, setDocuments] = useState<DocumentMeta[]>([])
@@ -122,6 +130,14 @@ export function useDocument(options: UseDocumentOptions = {}): UseDocumentReturn
       }
       setCurrentDoc(meta)
       setCurrentContent(res.content)
+      setCurrentDocumentId(meta.id)
+      setTemplateBinding(res.templateBinding ?? null)
+      if (res.templateBinding?.templateId) {
+        const templates = await editorService.getTemplates()
+        setTemplates(templates as any)
+        const matched = templates.find((item) => item.id === res.templateBinding?.templateId)
+        setCurrentTemplate((matched ?? null) as any)
+      }
       onLoaded?.(res.content, meta)
       return true
     } catch {
@@ -136,11 +152,12 @@ export function useDocument(options: UseDocumentOptions = {}): UseDocumentReturn
   const saveDocument = useCallback(async (
     content: string,
     title?: string,
-    template?: Template
+    template?: string,
+    templateBinding?: TemplateBinding | null
   ): Promise<boolean> => {
     setIsSaving(true)
     try {
-      const res = await editorService.saveDocument({ content, title, template })
+      const res = await editorService.saveDocument({ content, title, template, templateBinding })
       const meta: DocumentMeta = {
         id: res.id,
         title: title || currentDoc?.title || '未命名',
@@ -150,6 +167,8 @@ export function useDocument(options: UseDocumentOptions = {}): UseDocumentReturn
       }
       setCurrentDoc(meta)
       setCurrentContent(content)
+      setCurrentDocumentId(meta.id)
+      setTemplateBinding(templateBinding ?? null)
       
       // 更新列表中的文档
       setDocuments(prev => {
@@ -182,6 +201,8 @@ export function useDocument(options: UseDocumentOptions = {}): UseDocumentReturn
       if (currentDoc?.id === id) {
         setCurrentDoc(null)
         setCurrentContent('')
+        setCurrentDocumentId(null)
+        setTemplateBinding(null)
       }
       
       onDeleted?.(id)
@@ -196,13 +217,17 @@ export function useDocument(options: UseDocumentOptions = {}): UseDocumentReturn
   const createNew = useCallback(() => {
     setCurrentDoc(null)
     setCurrentContent('')
-  }, [])
+    setCurrentDocumentId(null)
+    setTemplateBinding(null)
+  }, [setCurrentDocumentId, setTemplateBinding])
 
   /** 清空当前文档 */
   const clearCurrent = useCallback(() => {
     setCurrentDoc(null)
     setCurrentContent('')
-  }, [])
+    setCurrentDocumentId(null)
+    setTemplateBinding(null)
+  }, [setCurrentDocumentId, setTemplateBinding])
 
   return {
     // 状态

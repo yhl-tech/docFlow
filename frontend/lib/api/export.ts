@@ -1,5 +1,5 @@
 import { api } from './instance'
-import type { Template } from '@/store/editorStore'
+import type { TemplateBinding } from '@/types/editor-template'
 
 /**
  * 导出格式类型
@@ -31,7 +31,8 @@ const EXPORT_FILE_EXT: Record<ExportFormat, string> = {
  */
 export interface ExportParams {
   markdown: string
-  template?: Template
+  template?: string
+  templateBinding?: TemplateBinding | null
 }
 
 /**

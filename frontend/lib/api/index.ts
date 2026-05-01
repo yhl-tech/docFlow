@@ -64,5 +64,14 @@ export type {
   SaveDocumentResponse,
 } from './editor'
 
+export type {
+  FontInfo,
+  LayoutConfig,
+  StyleSlotConfig,
+  TemplateBinding,
+  TemplateConfig,
+  TemplateDefinition,
+} from '@/types/editor-template'
+
 export type { UserInfo } from './auth'
 export type { PlanType, PayChannel } from './payment'

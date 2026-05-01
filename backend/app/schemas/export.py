@@ -1,15 +1,20 @@
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 ExportFormat = Literal["docx", "pdf", "excel", "image"]
-Template = Literal["default", "academic", "business", "simple"]
+Template = str
 
 
 class ExportRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     markdown: str
     template: Template = "default"
     page_size: str = "A4"
+    template_binding: Optional[dict[str, Any]] = Field(
+        default=None,
+        validation_alias="templateBinding"  # 前端发送的字段名
+    )
 
     @field_validator("markdown")
     @classmethod
