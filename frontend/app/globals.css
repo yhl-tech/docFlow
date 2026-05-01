@@ -323,7 +323,7 @@
   font-size: var(--tpl-title-size, 1.75rem) !important;
   font-weight: var(--tpl-title-weight, 700) !important;
   text-align: var(--tpl-title-align, center) !important;
-  text-align-last: center !important;
+  text-align-last: var(--tpl-title-align, center) !important;
   display: block !important;
   width: 100% !important;
   margin-left: auto !important;

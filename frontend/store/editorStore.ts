@@ -123,19 +123,48 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           state.currentTemplate?.config ??
           null
       }
-      if (!baseConfig) return state
+      if (!baseConfig) {
+        return state
+      }
 
-      return {
-        draftTemplateConfig: {
-          ...structuredClone(baseConfig),
-          styles: {
-            ...structuredClone(baseConfig.styles),
-            [styleKey]: {
-              ...structuredClone(baseConfig.styles[styleKey]),
-              ...patch,
-            },
+      const newConfig = {
+        ...structuredClone(baseConfig),
+        styles: {
+          ...structuredClone(baseConfig.styles),
+          [styleKey]: {
+            ...structuredClone(baseConfig.styles[styleKey]),
+            ...patch,
           },
         },
+      }
+
+      // 如果已有 templateBinding，更新它
+      if (state.templateBinding) {
+        return {
+          draftTemplateConfig: newConfig,
+          templateBinding: {
+            ...state.templateBinding,
+            configSnapshot: newConfig,
+          },
+        }
+      }
+
+      // 如果没有 templateBinding 但有 currentTemplate，创建一个新的
+      if (!state.templateBinding && state.currentTemplate) {
+        return {
+          draftTemplateConfig: newConfig,
+          templateBinding: {
+            id: state.currentTemplate.id,
+            name: state.currentTemplate.name,
+            configSnapshot: newConfig,
+            appliedAt: new Date().toISOString(),
+          },
+        }
+      }
+
+      // 都不存在时只更新 draft
+      return {
+        draftTemplateConfig: newConfig,
       }
     })
   },
@@ -165,15 +194,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         },
       }
     }),
-  openTemplatePanel: () =>
-    set((state) => ({
-      templatePanelOpen: true,
-      draftTemplateConfig: state.templateBinding?.configSnapshot
-        ? structuredClone(state.templateBinding.configSnapshot)
-        : state.currentTemplate
-          ? structuredClone(state.currentTemplate.config)
-          : null,
-    })),
+  openTemplatePanel: () => {
+    return set((state) => {
+      return {
+        templatePanelOpen: true,
+        draftTemplateConfig: state.templateBinding?.configSnapshot
+          ? structuredClone(state.templateBinding.configSnapshot)
+          : state.currentTemplate
+            ? structuredClone(state.currentTemplate.config)
+            : null,
+      }
+    })
+  },
   closeTemplatePanel: () => set({ templatePanelOpen: false }),
   resetDraftFromCurrent: () =>
     set((state) => ({

@@ -143,7 +143,7 @@ function buildTemplateStyle(config: import('@/types/editor-template').TemplateCo
 }
 
 export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
-  const { content, setContent, isFullscreen, setFullscreen, templatePanelOpen, draftTemplateConfig, templateBinding, setEditorInstance, pendingWordStyles, setPendingWordStyles } = useEditorStore()
+  const { content, setContent, isFullscreen, setFullscreen, templatePanelOpen, draftTemplateConfig, templateBinding, setEditorInstance, pendingWordStyles, setPendingWordStyles, updateDraftStyle } = useEditorStore()
   // 使用 useMemo 确保响应式更新
   const previewConfig = useMemo(() => {
     if (templatePanelOpen && draftTemplateConfig) {
@@ -292,6 +292,41 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
     if (editor) editorRef.current = editor
   }, [editor])
 
+  // 监听用户在文档标题上的加粗操作，同步到模板设置
+  useEffect(() => {
+    if (!editor || !previewConfig) return
+
+    let prevBoldState: boolean | null = null
+
+    const updateBold = () => {
+      const dom = editor.view.dom as HTMLElement
+      const titleEl = dom.querySelector('[data-style-key="document_title"]')
+      if (!titleEl) return
+
+      const hasStrong = titleEl.querySelector('strong') !== null
+      const templateBold = previewConfig?.styles?.document_title?.bold
+
+      if (prevBoldState !== null && prevBoldState !== hasStrong) {
+        updateDraftStyle('document_title', { bold: hasStrong })
+      }
+      prevBoldState = hasStrong
+    }
+
+    // 监听选区变化
+    const handleSelectionUpdate = () => {
+      updateBold()
+    }
+
+    editor.on('selectionUpdate', handleSelectionUpdate)
+
+    // 初始检测
+    updateBold()
+
+    return () => {
+      editor.off('selectionUpdate', handleSelectionUpdate)
+    }
+  }, [editor, previewConfig?.styles?.document_title?.bold, updateDraftStyle])
+
   // 响应外部 content 变化（如 AI 对话填入内容）
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
@@ -419,6 +454,85 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
   // 全屏层内容（当 isFullscreen 为 true 时通过 Portal 渲染到 body）
   const templateStyle = buildTemplateStyle(previewConfig)
 
+  // 追踪标题的实际样式（当没有模板时，跟踪用户手动设置的样式）
+  const [titleActualBold, setTitleActualBold] = useState<boolean>(true)
+
+  // 当没有模板绑定时，监听标题的实际样式
+  useEffect(() => {
+    if (!editor) return
+
+    const updateTitleBold = () => {
+      const dom = editor.view.dom as HTMLElement
+      const titleEl = dom.querySelector('[data-style-key="document_title"]')
+      if (!titleEl) return
+      const hasStrong = titleEl.querySelector('strong') !== null
+      setTitleActualBold(hasStrong)
+    }
+
+    // 监听选区变化（Bold 切换会触发这个）
+    editor.on('selectionUpdate', updateTitleBold)
+    // 监听内容变化
+    editor.on('update', updateTitleBold)
+
+    // 初始检测
+    updateTitleBold()
+
+    return () => {
+      editor.off('selectionUpdate', updateTitleBold)
+      editor.off('update', updateTitleBold)
+    }
+  }, [editor])
+
+  // 当没有模板时，使用标题的实际样式
+  const finalStyle = useMemo(() => {
+    if (previewConfig) {
+      // 有模板时，使用模板配置
+      return templateStyle
+    }
+    // 没有模板时，根据标题的实际加粗状态设置 CSS 变量
+    return {
+      ...templateStyle,
+      '--tpl-title-weight': titleActualBold ? '700' : '400',
+    }
+  }, [templateStyle, previewConfig, titleActualBold])
+
+  // 追踪模板设置的变化（只在模板面板主动修改时触发）
+  const lastTemplateBoldRef = useRef<boolean | undefined>(undefined)
+  const lastUserBoldRef = useRef<boolean | undefined>(undefined)
+
+  // 当模板设置改变加粗时，同步标题上的 strong 标签
+  useEffect(() => {
+    if (!editor || !previewConfig) return
+    const templateBold = previewConfig.styles?.document_title?.bold
+    const dom = editor.view.dom as HTMLElement
+    const titleEl = dom.querySelector('[data-style-key="document_title"]')
+    if (!titleEl) return
+
+    const titleText = titleEl.textContent?.trim() || ''
+    const hasStrong = titleEl.querySelector('strong') !== null
+
+    // 检测是否是模板设置主动变化（与上次记录的值不同）
+    const templateChanged = lastTemplateBoldRef.current !== templateBold
+    if (templateChanged) {
+      lastTemplateBoldRef.current = templateBold
+      lastUserBoldRef.current = hasStrong
+
+      if (templateBold === false && hasStrong) {
+        // 模板要求不加粗，但标题被加粗了 → 取消加粗
+        const pos = editor.view.posAtDOM(titleEl, 0)
+        if (pos >= 0) {
+          editor.chain().focus().setTextSelection({ from: pos, to: pos + titleText.length }).toggleBold().run()
+        }
+      } else if (templateBold === true && !hasStrong) {
+        // 模板要求加粗，但标题没加粗 → 添加加粗
+        const pos = editor.view.posAtDOM(titleEl, 0)
+        if (pos >= 0) {
+          editor.chain().focus().setTextSelection({ from: pos, to: pos + titleText.length }).toggleBold().run()
+        }
+      }
+    }
+  }, [previewConfig?.styles?.document_title?.bold, editor])
+
   const fullscreenLayer = (
     <div className="fixed inset-0 z-[9999] bg-white">
       {/* 顶部工具栏 */}
@@ -434,7 +548,7 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
       </div>
 
       <div className="h-full flex items-center justify-center p-8 pt-16">
-        <div ref={containerRef} id="editor-root" className="max-w-4xl w-full h-full rounded-lg border border-slate-200/80 bg-white shadow-lg p-8 tpl-paper" style={templateStyle}>
+        <div ref={containerRef} id="editor-root" className="max-w-4xl w-full h-full rounded-lg border border-slate-200/80 bg-white shadow-lg p-8 tpl-paper" style={finalStyle}>
           <EditorContent editor={editor} />
         </div>
       </div>
@@ -453,7 +567,7 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
     <div ref={containerRef} id="editor-root" className="editor-scroll relative h-full overflow-y-auto bg-slate-100/60 px-6 py-6">
       <div
         className="mx-auto min-h-full max-w-[680px] rounded-sm border border-slate-200/80 bg-white shadow-sm tpl-paper"
-        style={templateStyle}
+        style={finalStyle}
       >
         <EditorContent editor={editor} />
       </div>
