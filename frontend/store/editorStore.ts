@@ -154,7 +154,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         return {
           draftTemplateConfig: newConfig,
           templateBinding: {
-            id: state.currentTemplate.id,
+            templateId: state.currentTemplate.id,
             name: state.currentTemplate.name,
             configSnapshot: newConfig,
             appliedAt: new Date().toISOString(),

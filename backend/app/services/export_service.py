@@ -1864,13 +1864,23 @@ class ExportService:
 
             # ── 5. 添加页脚页码 ─────────────────────────────────────────────────
             page_cfg = layout_cfg.get("pageNumber", {})
+            page_number_style = styles_cfg.get("page_number", {})
+            logger.info(f"[_apply_docx_font] page_number_style: {page_number_style}")
+            logger.info(f"[_apply_docx_font] layout.pageNumber: {page_cfg}")
             if page_cfg.get("enabled", True):
+                # 获取页码样式自己的字体和对齐方式，而不是使用 layout 中的值
+                page_font = self._font_display_name(
+                    page_number_style.get("fontFamily"),
+                    default_cjk_font
+                )
+                # 优先使用页码样式中的对齐方式，其次使用 layout 配置
+                page_align = page_number_style.get("align") or page_cfg.get("align", "right")
                 self._add_page_number_footer(
                     doc,
-                    styles_cfg.get("page_number", {}),
+                    page_number_style,
                     page_cfg.get("position", "bottom"),
-                    page_cfg.get("align", "right"),
-                    default_cjk_font,
+                    page_align,
+                    page_font,
                 )
 
             doc.save(docx_path)
@@ -1931,49 +1941,84 @@ class ExportService:
                 section.footer_distance = Pt(20)
                 section.header_distance = Pt(20)
 
-                # 添加 PAGE 字段
-                # 字段开始
-                run1 = footer_p.add_run()
-                rPr1 = OxmlElement("w:rPr")
-                fldChar1 = OxmlElement("w:fldChar")
-                fldChar1.set(qn("w:fldCharType"), "begin")
-                rPr1.append(fldChar1)
-                run1._r.append(rPr1)
+                # 添加 PAGE 字段 - 所有 run 都需要正确的字体属性
+                runs_info = [
+                    ("begin", None),      # 字段开始
+                    ("instr", " PAGE "),  # 字段指令
+                    ("sep", None),        # 字段分隔
+                    ("result", "1"),      # 字段结果
+                    ("end", None),        # 字段结束
+                ]
 
-                # 字段指令 " PAGE "
-                run2 = footer_p.add_run()
-                rPr2 = OxmlElement("w:rPr")
-                instrText = OxmlElement("w:instrText")
-                instrText.set(qn("xml:space"), "preserve")
-                instrText.text = " PAGE "
-                rPr2.append(instrText)
-                run2._r.append(rPr2)
-
-                # 字段分隔
-                run3 = footer_p.add_run()
-                rPr3 = OxmlElement("w:rPr")
-                fldChar3 = OxmlElement("w:fldChar")
-                fldChar3.set(qn("w:fldCharType"), "separate")
-                rPr3.append(fldChar3)
-                run3._r.append(rPr3)
-
-                # 字段结果（初始显示 1）
-                run4 = footer_p.add_run()
-                run4.text = "1"
-
-                # 字段结束
-                run5 = footer_p.add_run()
-                rPr5 = OxmlElement("w:rPr")
-                fldChar5 = OxmlElement("w:fldChar")
-                fldChar5.set(qn("w:fldCharType"), "end")
-                rPr5.append(fldChar5)
-                run5._r.append(rPr5)
-
-                # 设置页脚字体
-                for para in footer.paragraphs:
-                    for run in para.runs:
-                        run.font.name = font_name
-                        run.font.size = Pt(font_size_pt)
+                for run_type, text in runs_info:
+                    if run_type in ("begin", "sep", "end"):
+                        # fldChar run
+                        run = footer_p.add_run()
+                        rPr = OxmlElement("w:rPr")
+                        # 设置字体
+                        rFonts = OxmlElement("w:rFonts")
+                        rFonts.set(qn("w:eastAsia"), font_name)
+                        rFonts.set(qn("w:ascii"), font_name)
+                        rFonts.set(qn("w:hAnsi"), font_name)
+                        rFonts.set(qn("w:cs"), font_name)
+                        rPr.append(rFonts)
+                        # 设置字号
+                        sz = OxmlElement("w:sz")
+                        sz.set(qn("w:val"), str(int(font_size_pt * 2)))
+                        rPr.append(sz)
+                        szCs = OxmlElement("w:szCs")
+                        szCs.set(qn("w:val"), str(int(font_size_pt * 2)))
+                        rPr.append(szCs)
+                        # 字段字符
+                        fldChar = OxmlElement("w:fldChar")
+                        fldChar.set(qn("w:fldCharType"), run_type)
+                        rPr.append(fldChar)
+                        run._r.append(rPr)
+                    elif run_type == "instr":
+                        # 指令文本 run
+                        run = footer_p.add_run()
+                        rPr = OxmlElement("w:rPr")
+                        # 设置字体
+                        rFonts = OxmlElement("w:rFonts")
+                        rFonts.set(qn("w:eastAsia"), font_name)
+                        rFonts.set(qn("w:ascii"), font_name)
+                        rFonts.set(qn("w:hAnsi"), font_name)
+                        rFonts.set(qn("w:cs"), font_name)
+                        rPr.append(rFonts)
+                        # 设置字号
+                        sz = OxmlElement("w:sz")
+                        sz.set(qn("w:val"), str(int(font_size_pt * 2)))
+                        rPr.append(sz)
+                        szCs = OxmlElement("w:szCs")
+                        szCs.set(qn("w:val"), str(int(font_size_pt * 2)))
+                        rPr.append(szCs)
+                        # 指令文本
+                        instrText = OxmlElement("w:instrText")
+                        instrText.set(qn("xml:space"), "preserve")
+                        instrText.text = text
+                        rPr.append(instrText)
+                        run._r.append(rPr)
+                    else:
+                        # 普通文本 run
+                        run = footer_p.add_run()
+                        run.text = text
+                        rPr = OxmlElement("w:rPr")
+                        # 设置字体
+                        rFonts = OxmlElement("w:rFonts")
+                        rFonts.set(qn("w:eastAsia"), font_name)
+                        rFonts.set(qn("w:ascii"), font_name)
+                        rFonts.set(qn("w:hAnsi"), font_name)
+                        rFonts.set(qn("w:cs"), font_name)
+                        rPr.append(rFonts)
+                        # 设置字号
+                        sz = OxmlElement("w:sz")
+                        sz.set(qn("w:val"), str(int(font_size_pt * 2)))
+                        rPr.append(sz)
+                        szCs = OxmlElement("w:szCs")
+                        szCs.set(qn("w:val"), str(int(font_size_pt * 2)))
+                        rPr.append(szCs)
+                        # 将 rPr 插入到 run 的开头
+                        run._r.insert(0, rPr)
 
                 logger.debug(f"已添加页脚页码: font={font_name}, size={font_size_pt}, align={align}")
             except Exception as e:

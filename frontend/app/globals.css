@@ -332,30 +332,6 @@
   padding-right: 0 !important;
   text-indent: 0 !important;
 }
-.tpl-paper .tiptap h2 {
-  font-family: var(--tpl-h2-font, inherit);
-  font-size: var(--tpl-h2-size, 1.25rem);
-  font-weight: var(--tpl-h2-weight, 700);
-  text-align: var(--tpl-h2-align, left);
-}
-.tpl-paper .tiptap h3 {
-  font-family: var(--tpl-h3-font, inherit);
-  font-size: var(--tpl-h3-size, 1.125rem);
-  font-weight: var(--tpl-h3-weight, 600);
-  text-align: var(--tpl-h3-align, left);
-}
-.tpl-paper .tiptap h4 {
-  font-family: var(--tpl-h4-font, inherit);
-  font-size: var(--tpl-h4-size, 1rem);
-  font-weight: var(--tpl-h4-weight, 600);
-  text-align: var(--tpl-h4-align, left);
-}
-.tpl-paper .tiptap h5 {
-  font-family: var(--tpl-h5-font, inherit);
-  font-size: var(--tpl-h5-size, 0.9375rem);
-  font-weight: var(--tpl-h5-weight, 600);
-  text-align: var(--tpl-h5-align, left);
-}
 /* 副标题（课题标题模板的 subject_info / document_subtitle） */
 .tpl-paper [data-style-key="subject_info"],
 .tpl-paper [data-style-key="document_subtitle"],
@@ -364,6 +340,56 @@
   font-size: var(--tpl-subtitle-size, 1rem) !important;
   font-weight: var(--tpl-subtitle-weight, 400) !important;
   text-align: var(--tpl-subtitle-align, left) !important;
+}
+/* 正文样式 - 通过 data-style-key 匹配 */
+.tpl-paper [data-style-key="body"] {
+  font-family: var(--tpl-body-font, inherit) !important;
+  font-size: var(--tpl-body-size, 0.9375rem) !important;
+  font-weight: var(--tpl-body-weight, 400) !important;
+  text-align: var(--tpl-body-align, left) !important;
+  text-indent: var(--tpl-body-indent, 0) !important;
+  line-height: var(--tpl-body-line-height, 1.75) !important;
+}
+/* 标题样式 - 通过 data-style-key 属性匹配 */
+.tpl-paper [data-style-key="heading_1"] {
+  font-family: var(--tpl-h1-font, inherit) !important;
+  font-size: var(--tpl-h1-size, 1rem) !important;
+  font-weight: var(--tpl-h1-weight, 700) !important;
+  text-align: var(--tpl-h1-align, left) !important;
+  margin: 1.25rem 0 0.5rem !important;
+  line-height: 1.3 !important;
+}
+.tpl-paper [data-style-key="heading_2"] {
+  font-family: var(--tpl-h2-font, inherit) !important;
+  font-size: var(--tpl-h2-size, 1rem) !important;
+  font-weight: var(--tpl-h2-weight, 700) !important;
+  text-align: var(--tpl-h2-align, left) !important;
+  margin: 1rem 0 0.5rem !important;
+  line-height: 1.35 !important;
+}
+.tpl-paper [data-style-key="heading_3"] {
+  font-family: var(--tpl-h3-font, inherit) !important;
+  font-size: var(--tpl-h3-size, 1rem) !important;
+  font-weight: var(--tpl-h3-weight, 600) !important;
+  text-align: var(--tpl-h3-align, left) !important;
+  margin: 0.875rem 0 0.375rem !important;
+  line-height: 1.35 !important;
+}
+.tpl-paper [data-style-key="heading_4"] {
+  font-family: var(--tpl-h4-font, inherit) !important;
+  font-size: var(--tpl-h4-size, 1rem) !important;
+  font-weight: var(--tpl-h4-weight, 600) !important;
+  text-align: var(--tpl-h4-align, left) !important;
+  margin: 0.75rem 0 0.25rem !important;
+  line-height: 1.35 !important;
+}
+.tpl-paper [data-style-key="heading_5"] {
+  font-family: var(--tpl-h5-font, inherit) !important;
+  font-size: var(--tpl-h5-size, 1rem) !important;
+  font-weight: var(--tpl-h5-weight, 600) !important;
+  text-align: var(--tpl-h5-align, left) !important;
+  margin: 0.75rem 0 0.25rem !important;
+  line-height: 1.35 !important;
 }
 
 /* ─── 模板设置面板滚动条：统一 1cm 宽 ─── */

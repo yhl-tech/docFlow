@@ -1,26 +1,26 @@
-'use client'
+"use client"
 
-import React, { useEffect, useRef, useCallback, useState, useMemo } from 'react'
-import { createPortal } from 'react-dom'
-import { useEditor, EditorContent, type Editor } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import Underline from '@tiptap/extension-underline'
-import { Table } from '@tiptap/extension-table'
-import TableRow from '@tiptap/extension-table-row'
-import TableHeader from '@tiptap/extension-table-header'
-import TableCell from '@tiptap/extension-table-cell'
-import Placeholder from '@tiptap/extension-placeholder'
-import Image from '@tiptap/extension-image'
-import { Markdown } from 'tiptap-markdown'
-import { toast } from 'sonner'
-import { Minimize2 } from 'lucide-react'
-import { useEditorStore } from '@/store/editorStore'
-import { aiService } from '@/lib/api'
-import { KaTeXNode } from './extensions/KaTeXNode'
-import StyleKeyExtension from './extensions/StyleKeyExtension'
-import { WordStyleApplierPlugin } from './extensions/WordStyleApplier'
-import FontFamily from '@tiptap/extension-font-family'
-import { FloatingAIToolbar } from './FloatingAIToolbar'
+import React, { useEffect, useRef, useCallback, useState, useMemo } from "react"
+import { createPortal } from "react-dom"
+import { useEditor, EditorContent, type Editor } from "@tiptap/react"
+import StarterKit from "@tiptap/starter-kit"
+import Underline from "@tiptap/extension-underline"
+import { Table } from "@tiptap/extension-table"
+import TableRow from "@tiptap/extension-table-row"
+import TableHeader from "@tiptap/extension-table-header"
+import TableCell from "@tiptap/extension-table-cell"
+import Placeholder from "@tiptap/extension-placeholder"
+import Image from "@tiptap/extension-image"
+import { Markdown } from "tiptap-markdown"
+import { toast } from "sonner"
+import { Minimize2 } from "lucide-react"
+import { useEditorStore } from "@/store/editorStore"
+import { aiService } from "@/lib/api"
+import { KaTeXNode } from "./extensions/KaTeXNode"
+import StyleKeyExtension from "./extensions/StyleKeyExtension"
+import { WordStyleApplierPlugin } from "./extensions/WordStyleApplier"
+import FontFamily from "@tiptap/extension-font-family"
+import { FloatingAIToolbar } from "./FloatingAIToolbar"
 
 /**
  * style-key 标记逻辑已迁移到 StyleKeyExtension（MutationObserver 方案）。
@@ -28,11 +28,14 @@ import { FloatingAIToolbar } from './FloatingAIToolbar'
  */
 function preprocessMath(text: string): string {
   // 统一换行符（Windows 剪贴板可能是 CRLF）
-  let s = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  let s = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
   // 1. 豆包 / 标准 LaTeX 多行 \[...\]  →  $$...$$
   s = s.replace(/\\\[\n([\s\S]*?)\n\\\]/g, (_, c) => `$$\n${c}\n$$`)
   // 2. DeepSeek 风格：[ 独占一行 ... ] 独占一行  →  $$...$$
-  s = s.replace(/(^|\n)\[\n([\s\S]*?)\n\](\n|$)/g, (_, pre, c, post) => `${pre}$$\n${c}\n$$${post}`)
+  s = s.replace(
+    /(^|\n)\[\n([\s\S]*?)\n\](\n|$)/g,
+    (_, pre, c, post) => `${pre}$$\n${c}\n$$${post}`,
+  )
   // 3. 单行 \[...\]  →  $$...$$
   s = s.replace(/\\\[([^\n]*?)\\\]/g, (_, c) => `$$${c}$$`)
   // 4. \(...\) 行内公式  →  $...$
@@ -53,21 +56,23 @@ interface TipTapEditorProps {
 }
 
 /* 将模板配置映射为编辑区 CSS 变量 */
-function buildTemplateStyle(config: import('@/types/editor-template').TemplateConfig | null): React.CSSProperties {
+function buildTemplateStyle(
+  config: import("@/types/editor-template").TemplateConfig | null,
+): React.CSSProperties {
   // 当 config 为 null 时，使用默认 CSS 变量
   if (!config) {
     return {
-      '--tpl-title-size': '1.5rem',
-      '--tpl-title-weight': '700',
-      '--tpl-title-align': 'center',
-      '--tpl-h1-size': '1.25rem',
-      '--tpl-h1-align': 'left',
-      '--tpl-h2-align': 'left',
-      '--tpl-h3-align': 'left',
-      '--tpl-h4-align': 'left',
-      '--tpl-h5-align': 'left',
-      '--tpl-body-weight': '400',
-      '--tpl-body-align': 'left',
+      "--tpl-title-size": "1.5rem",
+      "--tpl-title-weight": "700",
+      "--tpl-title-align": "center",
+      "--tpl-h1-size": "1.25rem",
+      "--tpl-h1-align": "left",
+      "--tpl-h2-align": "left",
+      "--tpl-h3-align": "left",
+      "--tpl-h4-align": "left",
+      "--tpl-h5-align": "left",
+      "--tpl-body-weight": "400",
+      "--tpl-body-align": "left",
     } as React.CSSProperties
   }
   const { styles, layout } = config
@@ -95,55 +100,72 @@ function buildTemplateStyle(config: import('@/types/editor-template').TemplateCo
     NSimSun: '"NSimSun", "新宋体", serif',
     STSong: '"STSong", "华文宋体", serif',
     STZhongsong: '"STZhongsong", "华文中宋", serif',
-    'Microsoft YaHei': '"Microsoft YaHei", "微软雅黑", sans-serif',
+    "Microsoft YaHei": '"Microsoft YaHei", "微软雅黑", sans-serif',
   }
   const fontVar = (id?: string) => (id ? (FONT_ID_MAP[id] ?? id) : undefined)
 
   const result = {
-    '--tpl-body-font': fontVar(body.fontFamily) ?? 'inherit',
-    '--tpl-body-size': body.fontSizePt ? `${body.fontSizePt}pt` : undefined,
-    '--tpl-body-weight': body.bold ? '700' : '400',
-    '--tpl-body-align': body.align ?? 'left',
-    '--tpl-body-line-height': (layout?.defaultLineHeight ?? body.lineHeight)?.toString() ?? undefined,
-    '--tpl-body-indent': `${(layout?.defaultFirstLineIndentChars ?? body.firstLineIndentChars ?? 0)}em`,
-    '--tpl-paragraph-space-before': `${layout?.defaultParagraphSpacingBeforePt ?? 0}pt`,
-    '--tpl-paragraph-space-after': `${layout?.defaultParagraphSpacingAfterPt ?? 0}pt`,
-    '--tpl-title-font': fontVar(title.fontFamily) ?? 'inherit',
-    '--tpl-title-size': title.fontSizePt ? `${title.fontSizePt}pt` : undefined,
-    '--tpl-title-align': title.align ?? 'center',
-    '--tpl-title-weight': title.bold ? '700' : '400',
-    '--tpl-subtitle-font': fontVar(subtitle.fontFamily) ?? 'inherit',
-    '--tpl-subtitle-size': subtitle.fontSizePt ? `${subtitle.fontSizePt}pt` : undefined,
-    '--tpl-subtitle-align': subtitle.align ?? 'center',
-    '--tpl-subtitle-weight': subtitle.bold ? '700' : '400',
-    '--tpl-h1-font': fontVar(h1.fontFamily) ?? 'inherit',
-    '--tpl-h1-size': h1.fontSizePt ? `${h1.fontSizePt}pt` : undefined,
-    '--tpl-h1-weight': h1.bold ? '700' : '400',
-    '--tpl-h1-align': h1.align ?? 'left',
-    '--tpl-h2-font': fontVar(h2.fontFamily) ?? 'inherit',
-    '--tpl-h2-size': h2.fontSizePt ? `${h2.fontSizePt}pt` : undefined,
-    '--tpl-h2-weight': h2.bold ? '700' : '400',
-    '--tpl-h2-align': h2.align ?? 'left',
-    '--tpl-h3-font': fontVar(h3.fontFamily) ?? 'inherit',
-    '--tpl-h3-size': h3.fontSizePt ? `${h3.fontSizePt}pt` : undefined,
-    '--tpl-h3-weight': h3.bold ? '700' : '400',
-    '--tpl-h3-align': h3.align ?? 'left',
-    '--tpl-h4-font': fontVar(h4.fontFamily) ?? 'inherit',
-    '--tpl-h4-size': h4.fontSizePt ? `${h4.fontSizePt}pt` : undefined,
-    '--tpl-h4-weight': h4.bold ? '700' : '400',
-    '--tpl-h4-align': h4.align ?? 'left',
-    '--tpl-h5-font': fontVar(h5.fontFamily) ?? 'inherit',
-    '--tpl-h5-size': h5.fontSizePt ? `${h5.fontSizePt}pt` : undefined,
-    '--tpl-h5-weight': h5.bold ? '700' : '400',
-    '--tpl-h5-align': h5.align ?? 'left',
-    '--tpl-margin': layout ? `${layout.marginTopMm ?? 25}mm ${layout.marginRightMm ?? 20}mm ${layout.marginBottomMm ?? 25}mm ${layout.marginLeftMm ?? 20}mm` : undefined,
+    "--tpl-body-font": fontVar(body.fontFamily) ?? "inherit",
+    "--tpl-body-size": body.fontSizePt ? `${body.fontSizePt}pt` : undefined,
+    "--tpl-body-weight": body.bold ? "700" : "400",
+    "--tpl-body-align": body.align ?? "left",
+    "--tpl-body-line-height":
+      (layout?.defaultLineHeight ?? body.lineHeight)?.toString() ?? undefined,
+    "--tpl-body-indent": `${layout?.defaultFirstLineIndentChars ?? body.firstLineIndentChars ?? 0}em`,
+    "--tpl-paragraph-space-before": `${layout?.defaultParagraphSpacingBeforePt ?? 0}pt`,
+    "--tpl-paragraph-space-after": `${layout?.defaultParagraphSpacingAfterPt ?? 0}pt`,
+    "--tpl-title-font": fontVar(title.fontFamily) ?? "inherit",
+    "--tpl-title-size": title.fontSizePt ? `${title.fontSizePt}pt` : undefined,
+    "--tpl-title-align": title.align ?? "center",
+    "--tpl-title-weight": title.bold ? "700" : "400",
+    "--tpl-subtitle-font": fontVar(subtitle.fontFamily) ?? "inherit",
+    "--tpl-subtitle-size": subtitle.fontSizePt
+      ? `${subtitle.fontSizePt}pt`
+      : undefined,
+    "--tpl-subtitle-align": subtitle.align ?? "center",
+    "--tpl-subtitle-weight": subtitle.bold ? "700" : "400",
+    "--tpl-h1-font": fontVar(h1.fontFamily) ?? "inherit",
+    "--tpl-h1-size": h1.fontSizePt ? `${h1.fontSizePt}pt` : undefined,
+    "--tpl-h1-weight": h1.bold ? "700" : "400",
+    "--tpl-h1-align": h1.align ?? "left",
+    "--tpl-h2-font": fontVar(h2.fontFamily) ?? "inherit",
+    "--tpl-h2-size": h2.fontSizePt ? `${h2.fontSizePt}pt` : undefined,
+    "--tpl-h2-weight": h2.bold ? "700" : "400",
+    "--tpl-h2-align": h2.align ?? "left",
+    "--tpl-h3-font": fontVar(h3.fontFamily) ?? "inherit",
+    "--tpl-h3-size": h3.fontSizePt ? `${h3.fontSizePt}pt` : undefined,
+    "--tpl-h3-weight": h3.bold ? "700" : "400",
+    "--tpl-h3-align": h3.align ?? "left",
+    "--tpl-h4-font": fontVar(h4.fontFamily) ?? "inherit",
+    "--tpl-h4-size": h4.fontSizePt ? `${h4.fontSizePt}pt` : undefined,
+    "--tpl-h4-weight": h4.bold ? "700" : "400",
+    "--tpl-h4-align": h4.align ?? "left",
+    "--tpl-h5-font": fontVar(h5.fontFamily) ?? "inherit",
+    "--tpl-h5-size": h5.fontSizePt ? `${h5.fontSizePt}pt` : undefined,
+    "--tpl-h5-weight": h5.bold ? "700" : "400",
+    "--tpl-h5-align": h5.align ?? "left",
+    "--tpl-margin": layout
+      ? `${layout.marginTopMm ?? 25}mm ${layout.marginRightMm ?? 20}mm ${layout.marginBottomMm ?? 25}mm ${layout.marginLeftMm ?? 20}mm`
+      : undefined,
   } as React.CSSProperties
 
   return result
 }
 
 export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
-  const { content, setContent, isFullscreen, setFullscreen, templatePanelOpen, draftTemplateConfig, templateBinding, setEditorInstance, pendingWordStyles, setPendingWordStyles, updateDraftStyle } = useEditorStore()
+  const {
+    content,
+    setContent,
+    isFullscreen,
+    setFullscreen,
+    templatePanelOpen,
+    draftTemplateConfig,
+    templateBinding,
+    setEditorInstance,
+    pendingWordStyles,
+    setPendingWordStyles,
+    updateDraftStyle,
+  } = useEditorStore()
   // 使用 useMemo 确保响应式更新
   const previewConfig = useMemo(() => {
     if (templatePanelOpen && draftTemplateConfig) {
@@ -156,7 +178,9 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
   const skipUpdate = useRef(false)
   // 用 ref 稳定持有回调，避免 useEditor extensions 重新初始化
   const onEditFormulaRef = useRef(onEditFormula)
-  useEffect(() => { onEditFormulaRef.current = onEditFormula }, [onEditFormula])
+  useEffect(() => {
+    onEditFormulaRef.current = onEditFormula
+  }, [onEditFormula])
   const stableEditCallback = useCallback(
     (latex: string, displayMode: boolean, pos: number) => {
       onEditFormulaRef.current?.(latex, displayMode, pos)
@@ -167,34 +191,48 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
   // 编辑器引用，供 handleAIAction 访问最新实例
   const editorRef = useRef<Editor | null>(null)
 
-  const handleAIAction = useCallback(async (action: string, option?: string) => {
-    const editor = editorRef.current
-    if (!editor) return
+  const handleAIAction = useCallback(
+    async (action: string, option?: string) => {
+      const editor = editorRef.current
+      if (!editor) return
 
-    const { from, to } = editor.state.selection
-    const selectedText = editor.state.doc.textBetween(from, to, ' ')
-    if (!selectedText.trim()) return
+      const { from, to } = editor.state.selection
+      const selectedText = editor.state.doc.textBetween(from, to, " ")
+      if (!selectedText.trim()) return
 
-    const params: Parameters<typeof aiService.rewrite>[0] = {
-      text: selectedText,
-      type: action as any,
-      ...(action === '扩写' && option ? { expandSubType: option as any } : {}),
-      ...(action === '改变语气' && option ? { toneSubType: option as any } : {}),
-      ...(action === '翻译' && option ? { translateSubType: option as any } : {}),
-    }
+      const params: Parameters<typeof aiService.rewrite>[0] = {
+        text: selectedText,
+        type: action as any,
+        ...(action === "扩写" && option
+          ? { expandSubType: option as any }
+          : {}),
+        ...(action === "改变语气" && option
+          ? { toneSubType: option as any }
+          : {}),
+        ...(action === "翻译" && option
+          ? { translateSubType: option as any }
+          : {}),
+      }
 
-    setIsRewriting(true)
-    const toastId = toast.loading(`${action}中…`)
-    try {
-      const res = await aiService.rewrite(params)
-      editor.chain().focus().deleteRange({ from, to }).insertContentAt(from, res.result).run()
-      toast.success('已替换选中内容', { id: toastId })
-    } catch {
-      toast.error('AI 处理失败，请重试', { id: toastId })
-    } finally {
-      setIsRewriting(false)
-    }
-  }, [])
+      setIsRewriting(true)
+      const toastId = toast.loading(`${action}中…`)
+      try {
+        const res = await aiService.rewrite(params)
+        editor
+          .chain()
+          .focus()
+          .deleteRange({ from, to })
+          .insertContentAt(from, res.result)
+          .run()
+        toast.success("已替换选中内容", { id: toastId })
+      } catch {
+        toast.error("AI 处理失败，请重试", { id: toastId })
+      } finally {
+        setIsRewriting(false)
+      }
+    },
+    [],
+  )
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -210,10 +248,10 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
       TableCell,
       Image,
       Placeholder.configure({
-        placeholder: '',
+        placeholder: "",
       }),
       Markdown.configure({
-        html: false,              // 不允许 HTML 输入（安全）
+        html: false, // 不允许 HTML 输入（安全）
         transformPastedText: true, // 粘贴 Markdown 时自动转为富文本
         transformCopiedText: false,
       }),
@@ -228,7 +266,7 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
     ],
     editorProps: {
       attributes: {
-        class: 'tiptap-editor outline-none',
+        class: "tiptap-editor outline-none",
       },
     },
     onUpdate({ editor }) {
@@ -246,21 +284,23 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
         const dom = editor.view.dom as HTMLElement
         if (!dom) return
         // 优先查找 h1（Markdown # 标题格式）
-        const firstH1 = dom.querySelector('h1:first-of-type')
+        const firstH1 = dom.querySelector("h1:first-of-type")
         if (firstH1) {
-          firstH1.classList.add('document-title')
+          firstH1.classList.add("document-title")
         } else {
-          const firstP = dom.querySelector('p:first-of-type')
+          const firstP = dom.querySelector("p:first-of-type")
           if (firstP) {
-            firstP.classList.add('document-title')
+            firstP.classList.add("document-title")
           }
         }
         // 标记副标题（第二个段落）
-        const blocks = dom.querySelectorAll(':scope > p, :scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6')
+        const blocks = dom.querySelectorAll(
+          ":scope > p, :scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6",
+        )
         if (blocks.length >= 2) {
           const secondBlock = blocks[1]
-          if (!secondBlock.classList.contains('document-title')) {
-            secondBlock.classList.add('document-subtitle')
+          if (!secondBlock.classList.contains("document-title")) {
+            secondBlock.classList.add("document-subtitle")
           }
         }
       }
@@ -303,11 +343,11 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
       const titleEl = dom.querySelector('[data-style-key="document_title"]')
       if (!titleEl) return
 
-      const hasStrong = titleEl.querySelector('strong') !== null
+      const hasStrong = titleEl.querySelector("strong") !== null
       const templateBold = previewConfig?.styles?.document_title?.bold
 
       if (prevBoldState !== null && prevBoldState !== hasStrong) {
-        updateDraftStyle('document_title', { bold: hasStrong })
+        updateDraftStyle("document_title", { bold: hasStrong })
       }
       prevBoldState = hasStrong
     }
@@ -317,13 +357,13 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
       updateBold()
     }
 
-    editor.on('selectionUpdate', handleSelectionUpdate)
+    editor.on("selectionUpdate", handleSelectionUpdate)
 
     // 初始检测
     updateBold()
 
     return () => {
-      editor.off('selectionUpdate', handleSelectionUpdate)
+      editor.off("selectionUpdate", handleSelectionUpdate)
     }
   }, [editor, previewConfig?.styles?.document_title?.bold, updateDraftStyle])
 
@@ -339,21 +379,23 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
       setTimeout(() => {
         const dom = editor.view.dom as HTMLElement
         if (!dom) return
-        const firstH1 = dom.querySelector('h1:first-of-type')
+        const firstH1 = dom.querySelector("h1:first-of-type")
         if (firstH1) {
-          firstH1.classList.add('document-title')
+          firstH1.classList.add("document-title")
         } else {
-          const firstP = dom.querySelector('p:first-of-type')
+          const firstP = dom.querySelector("p:first-of-type")
           if (firstP) {
-            firstP.classList.add('document-title')
+            firstP.classList.add("document-title")
           }
         }
         // 标记副标题（第二个段落）
-        const blocks = dom.querySelectorAll(':scope > p, :scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6')
+        const blocks = dom.querySelectorAll(
+          ":scope > p, :scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6",
+        )
         if (blocks.length >= 2) {
           const secondBlock = blocks[1]
-          if (!secondBlock.classList.contains('document-title')) {
-            secondBlock.classList.add('document-subtitle')
+          if (!secondBlock.classList.contains("document-title")) {
+            secondBlock.classList.add("document-subtitle")
           }
         }
       }, 100)
@@ -369,18 +411,18 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
     const timer = setTimeout(() => {
       // 再次检查 editor 状态和 style 数据
       if (!editor || editor.isDestroyed) return
-      
+
       // 获取当前文档文本，验证内容已稳定
       const currentDoc = editor.state.doc
       const docText = currentDoc.textContent
-      
+
       // 如果文档为空或非常短（内容可能还没加载完），跳过本次
       // 内容太短可能是 setContent 还在进行中
       if (docText.length < 10 && content.length > 10) {
         return
       }
 
-      const tr = editor.state.tr.setMeta('applyWordStyles', pendingWordStyles)
+      const tr = editor.state.tr.setMeta("applyWordStyles", pendingWordStyles)
       editor.view.dispatch(tr)
       // 消费后清空，防止重复应用
       setPendingWordStyles(null)
@@ -399,7 +441,7 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
 
     const onPaste = (e: ClipboardEvent) => {
       if (handling) return
-      const text = e.clipboardData?.getData('text/plain')
+      const text = e.clipboardData?.getData("text/plain")
       if (!text) return
       const converted = preprocessMath(text)
       if (converted === text) return // 无需转换，交给默认流程
@@ -410,8 +452,8 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
       // 构造只含 text/plain 的新事件，tiptap-markdown 拿不到 text/html
       // 从而走纯文本 Markdown 解析路径
       const dt = new DataTransfer()
-      dt.setData('text/plain', converted)
-      const synthetic = new ClipboardEvent('paste', {
+      dt.setData("text/plain", converted)
+      const synthetic = new ClipboardEvent("paste", {
         bubbles: true,
         cancelable: true,
         clipboardData: dt,
@@ -421,8 +463,8 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
       handling = false
     }
 
-    dom.addEventListener('paste', onPaste, true)
-    return () => dom.removeEventListener('paste', onPaste, true)
+    dom.addEventListener("paste", onPaste, true)
+    return () => dom.removeEventListener("paste", onPaste, true)
   }, [editor])
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -436,19 +478,20 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
         editor.chain().focus().setImage({ src: base64 }).run()
       }
     }
-    window.addEventListener('editor-insert-image', onInsertImage)
-    return () => window.removeEventListener('editor-insert-image', onInsertImage)
+    window.addEventListener("editor-insert-image", onInsertImage)
+    return () =>
+      window.removeEventListener("editor-insert-image", onInsertImage)
   }, [editor])
 
   // ESC 退出全屏
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isFullscreen) {
+      if (e.key === "Escape" && isFullscreen) {
         setFullscreen(false)
       }
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
   }, [isFullscreen, setFullscreen])
 
   // 全屏层内容（当 isFullscreen 为 true 时通过 Portal 渲染到 body）
@@ -465,21 +508,21 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
       const dom = editor.view.dom as HTMLElement
       const titleEl = dom.querySelector('[data-style-key="document_title"]')
       if (!titleEl) return
-      const hasStrong = titleEl.querySelector('strong') !== null
+      const hasStrong = titleEl.querySelector("strong") !== null
       setTitleActualBold(hasStrong)
     }
 
     // 监听选区变化（Bold 切换会触发这个）
-    editor.on('selectionUpdate', updateTitleBold)
+    editor.on("selectionUpdate", updateTitleBold)
     // 监听内容变化
-    editor.on('update', updateTitleBold)
+    editor.on("update", updateTitleBold)
 
     // 初始检测
     updateTitleBold()
 
     return () => {
-      editor.off('selectionUpdate', updateTitleBold)
-      editor.off('update', updateTitleBold)
+      editor.off("selectionUpdate", updateTitleBold)
+      editor.off("update", updateTitleBold)
     }
   }, [editor])
 
@@ -492,7 +535,7 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
     // 没有模板时，根据标题的实际加粗状态设置 CSS 变量
     return {
       ...templateStyle,
-      '--tpl-title-weight': titleActualBold ? '700' : '400',
+      "--tpl-title-weight": titleActualBold ? "700" : "400",
     }
   }, [templateStyle, previewConfig, titleActualBold])
 
@@ -508,8 +551,8 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
     const titleEl = dom.querySelector('[data-style-key="document_title"]')
     if (!titleEl) return
 
-    const titleText = titleEl.textContent?.trim() || ''
-    const hasStrong = titleEl.querySelector('strong') !== null
+    const titleText = titleEl.textContent?.trim() || ""
+    const hasStrong = titleEl.querySelector("strong") !== null
 
     // 检测是否是模板设置主动变化（与上次记录的值不同）
     const templateChanged = lastTemplateBoldRef.current !== templateBold
@@ -521,13 +564,23 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
         // 模板要求不加粗，但标题被加粗了 → 取消加粗
         const pos = editor.view.posAtDOM(titleEl, 0)
         if (pos >= 0) {
-          editor.chain().focus().setTextSelection({ from: pos, to: pos + titleText.length }).toggleBold().run()
+          editor
+            .chain()
+            .focus()
+            .setTextSelection({ from: pos, to: pos + titleText.length })
+            .toggleBold()
+            .run()
         }
       } else if (templateBold === true && !hasStrong) {
         // 模板要求加粗，但标题没加粗 → 添加加粗
         const pos = editor.view.posAtDOM(titleEl, 0)
         if (pos >= 0) {
-          editor.chain().focus().setTextSelection({ from: pos, to: pos + titleText.length }).toggleBold().run()
+          editor
+            .chain()
+            .focus()
+            .setTextSelection({ from: pos, to: pos + titleText.length })
+            .toggleBold()
+            .run()
         }
       }
     }
@@ -548,7 +601,12 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
       </div>
 
       <div className="h-full flex items-center justify-center p-8 pt-16">
-        <div ref={containerRef} id="editor-root" className="max-w-4xl w-full h-full rounded-lg border border-slate-200/80 bg-white shadow-lg p-8 tpl-paper" style={finalStyle}>
+        <div
+          ref={containerRef}
+          id="editor-root"
+          className="max-w-4xl w-full h-full rounded-lg border border-slate-200/80 bg-white shadow-lg p-8 tpl-paper"
+          style={finalStyle}
+        >
           <EditorContent editor={editor} />
         </div>
       </div>
@@ -564,7 +622,11 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
 
   // 非全屏时的普通编辑区
   const normalEditor = (
-    <div ref={containerRef} id="editor-root" className="editor-scroll relative h-full overflow-y-auto bg-slate-100/60 px-6 py-6">
+    <div
+      ref={containerRef}
+      id="editor-root"
+      className="editor-scroll relative h-full overflow-y-auto bg-slate-100/60 px-6 py-6"
+    >
       <div
         className="mx-auto min-h-full max-w-[680px] rounded-sm border border-slate-200/80 bg-white shadow-sm tpl-paper"
         style={finalStyle}
@@ -580,7 +642,7 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
   )
 
   // 全屏时用 Portal 渲染到 body，脱离 overflow-hidden 裁剪
-  if (isFullscreen && typeof document !== 'undefined') {
+  if (isFullscreen && typeof document !== "undefined") {
     return createPortal(fullscreenLayer, document.body)
   }
 
