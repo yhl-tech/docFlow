@@ -13,6 +13,8 @@ from slowapi.middleware import SlowAPIMiddleware
 from app.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.limiter import limiter
+from app.core.logging import setup_logging
+from app.core.middleware import LoggingMiddleware
 from app.database import init_db
 from app.routers import auth, export, records, user, payment, ai, editor
 
@@ -25,6 +27,7 @@ logger.add(
     level="DEBUG",  # 开发环境使用 DEBUG 级别
     colorize=True,
 )
+setup_logging(level="DEBUG", format_type="simple")
 
 
 @asynccontextmanager
@@ -58,6 +61,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 请求日志中间件
+app.add_middleware(LoggingMiddleware)
 
 # 统一异常处理
 register_exception_handlers(app)

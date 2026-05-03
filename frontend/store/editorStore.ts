@@ -49,6 +49,12 @@ interface EditorState {
   setDraftTemplateConfig: (config: TemplateConfig | null) => void
   updateDraftStyle: (styleKey: string, patch: Record<string, unknown>) => void
   updateDraftLayout: (field: string, value: unknown) => void
+  updateDraftLayoutFull: (patch: Record<string, unknown>) => void
+  updateDraftListStyles: (patch: Record<string, unknown>) => void
+  updateDraftCodeBlockStyles: (patch: Record<string, unknown>) => void
+  updateDraftTableStyles: (patch: Record<string, unknown>) => void
+  updateDraftImageStyles: (patch: Record<string, unknown>) => void
+  updateDraftHeaderFooter: (patch: Record<string, unknown>) => void
   updateDraftRule: (field: string, value: unknown) => void
   openTemplatePanel: () => void
   closeTemplatePanel: () => void
@@ -177,6 +183,87 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           layout: {
             ...state.draftTemplateConfig.layout,
             [field]: value,
+          },
+        },
+      }
+    }),
+  updateDraftLayoutFull: (patch) =>
+    set((state) => {
+      if (!state.draftTemplateConfig) return state
+      return {
+        draftTemplateConfig: {
+          ...state.draftTemplateConfig,
+          layout: {
+            ...state.draftTemplateConfig.layout,
+            ...patch,
+          },
+        },
+      }
+    }),
+  updateDraftListStyles: (patch) =>
+    set((state) => {
+      if (!state.draftTemplateConfig) return state
+      return {
+        draftTemplateConfig: {
+          ...state.draftTemplateConfig,
+          listStyles: {
+            ...(state.draftTemplateConfig.listStyles ?? {}),
+            ...patch,
+          },
+        },
+      }
+    }),
+  updateDraftCodeBlockStyles: (patch) =>
+    set((state) => {
+      if (!state.draftTemplateConfig) return state
+      return {
+        draftTemplateConfig: {
+          ...state.draftTemplateConfig,
+          codeBlockStyles: {
+            ...(state.draftTemplateConfig.codeBlockStyles ?? {}),
+            ...patch,
+          },
+        },
+      }
+    }),
+  updateDraftTableStyles: (patch) =>
+    set((state) => {
+      if (!state.draftTemplateConfig) return state
+      return {
+        draftTemplateConfig: {
+          ...state.draftTemplateConfig,
+          tableStyles: {
+            ...(state.draftTemplateConfig.tableStyles ?? {}),
+            ...patch,
+          },
+        },
+      }
+    }),
+  updateDraftImageStyles: (patch) =>
+    set((state) => {
+      if (!state.draftTemplateConfig) return state
+      return {
+        draftTemplateConfig: {
+          ...state.draftTemplateConfig,
+          imageStyles: {
+            ...(state.draftTemplateConfig.imageStyles ?? {}),
+            ...patch,
+          },
+        },
+      }
+    }),
+  updateDraftHeaderFooter: (patch) =>
+    set((state) => {
+      if (!state.draftTemplateConfig) return state
+      return {
+        draftTemplateConfig: {
+          ...state.draftTemplateConfig,
+          layout: {
+            ...state.draftTemplateConfig.layout,
+            headerFooter: {
+              ...(state.draftTemplateConfig.layout.headerFooter ?? {}),
+              ...patch,
+            },
           },
         },
       }

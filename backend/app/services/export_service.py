@@ -24,6 +24,10 @@ from pathlib import Path
 from typing import Any, Optional
 
 from loguru import logger
+from app.core.logging import get_logger
+
+# 获取服务专属 logger
+_log = get_logger(__name__)
 
 
 class PandocNotAvailableError(RuntimeError):
@@ -58,13 +62,13 @@ class ExportService:
             await asyncio.wait_for(proc.communicate(), timeout=10)
             return proc.returncode == 0
         except FileNotFoundError:
-            logger.debug(f"命令不存在: {cmd[0]}")
+            _log.debug(f"命令不存在: {cmd[0]}")
             return False
         except asyncio.TimeoutError:
-            logger.debug(f"命令执行超时: {cmd[0]}")
+            _log.debug(f"命令执行超时: {cmd[0]}")
             return False
         except OSError as e:
-            logger.debug(f"命令执行错误 {cmd[0]}: {e}")
+            _log.debug(f"命令执行错误 {cmd[0]}: {e}")
             return False
 
     # pandoc 搜索路径：优先从 PATH 环境变量动态获取，后备常见安装位置
@@ -94,11 +98,11 @@ class ExportService:
             path_normalized = path_from_env.lower().replace(".exe", "") + ".exe"
             # 直接检查文件是否存在（更可靠）
             if os.path.exists(path_normalized):
-                logger.info(f"从 PATH 找到 pandoc: {path_normalized}")
+                _log.info(f"从 PATH 找到 pandoc: {path_normalized}")
                 return path_normalized
             # 也尝试原始路径
             if os.path.exists(path_from_env):
-                logger.info(f"从 PATH 找到 pandoc: {path_from_env}")
+                _log.info(f"从 PATH 找到 pandoc: {path_from_env}")
                 return path_from_env
 
         # 2. 后备：遍历硬编码的路径列表（直接检查文件存在性）
@@ -107,16 +111,16 @@ class ExportService:
             if candidate == "pandoc":
                 continue
             if os.path.exists(candidate):
-                logger.info(f"从备用路径找到 pandoc: {candidate}")
+                _log.info(f"从备用路径找到 pandoc: {candidate}")
                 return candidate
 
         # 3. 最后尝试通过命令检测（兜底方案）
         for candidate in ["pandoc"]:
             if await self._check_tool(candidate, "--version"):
-                logger.info(f"从命令检测找到 pandoc: {candidate}")
+                _log.info(f"从命令检测找到 pandoc: {candidate}")
                 return candidate
 
-        logger.warning("未找到 pandoc，请确保已安装 https://pandoc.org")
+        _log.warning("未找到 pandoc，请确保已安装 https://pandoc.org")
         return ""
 
     async def pandoc_available(self) -> bool:
@@ -126,7 +130,7 @@ class ExportService:
             if self._pandoc_ok:
                 self._pandoc_bin_path = bin_path
             else:
-                logger.warning("pandoc 未找到，导出不可用")
+                _log.warning("pandoc 未找到，导出不可用")
         return self._pandoc_ok
 
     def _convert_bold_paras_to_headings(self, text: str) -> str:
@@ -222,7 +226,7 @@ class ExportService:
             )
             if proc.returncode != 0:
                 err = (proc.stderr or b"").decode("utf-8", errors="replace")[:500]
-                logger.error(f"Pandoc docx→md 失败: {err}")
+                _log.error(f"Pandoc docx→md 失败: {err}")
                 raise RuntimeError(f"Pandoc 解析 docx 失败: {err[:200]}")
             if not os.path.isfile(out_md):
                 raise RuntimeError("Pandoc 未生成 Markdown 文件")
@@ -287,7 +291,7 @@ class ExportService:
             )
             if proc.returncode != 0:
                 err = (proc.stderr or b"").decode("utf-8", errors="replace")[:500]
-                logger.error(f"Pandoc docx→html 失败: {err}")
+                _log.error(f"Pandoc docx→html 失败: {err}")
                 raise RuntimeError(f"Pandoc 解析 docx 失败: {err[:200]}")
             if not os.path.isfile(out_html):
                 raise RuntimeError("Pandoc 未生成 HTML 文件")
@@ -339,7 +343,7 @@ class ExportService:
                 partial(subprocess.run, cmd_str, shell=True, capture_output=True, cwd=tmpdir, timeout=120),
             )
             if proc_md.returncode != 0:
-                logger.warning(f"Pandoc docx→markdown 失败: {proc_md.stderr.decode(errors='replace')[:200]}")
+                _log.warning(f"Pandoc docx→markdown 失败: {proc_md.stderr.decode(errors='replace')[:200]}")
                 return []
 
             with open(out_md, encoding="utf-8") as f:
@@ -351,7 +355,7 @@ class ExportService:
             shutil.rmtree(tmpdir, ignore_errors=True)
 
         # 调试：打印 Markdown 文本片段，检查格式
-        logger.debug(f"docx_to_style_runs: Markdown长度={len(markdown_text)}, 前200字符:\n{markdown_text[:200]}")
+        _log.debug(f"docx_to_style_runs: Markdown长度={len(markdown_text)}, 前200字符:\n{markdown_text[:200]}")
 
         # 获取 JSON AST 获取样式信息
         cmd = [
@@ -367,7 +371,7 @@ class ExportService:
         )
         if proc.returncode != 0:
             err = (proc.stderr or b"").decode("utf-8", errors="replace")[:500]
-            logger.error(f"Pandoc docx→json 失败: {err}")
+            _log.error(f"Pandoc docx→json 失败: {err}")
             raise RuntimeError(f"Pandoc 解析 docx 失败: {err[:200]}")
 
         import json as _json
@@ -539,10 +543,10 @@ class ExportService:
             else:
                 merged.append(run)
 
-        logger.debug(f"docx_to_style_runs: 完成, merged={len(merged)}")
+        _log.debug(f"docx_to_style_runs: 完成, merged={len(merged)}")
         for i, m in enumerate(merged[:20]):  # 只打印前20个
             md_snippet = markdown_text[m["start"]:m["end"]][:30].replace("\n", "\\n")
-            logger.debug(f"  merged[{i}]: start={m['start']}, end={m['end']}, bold={m.get('bold')}, text='{md_snippet}'")
+            _log.debug(f"  merged[{i}]: start={m['start']}, end={m['end']}, bold={m.get('bold')}, text='{md_snippet}'")
 
         return merged
 
@@ -596,21 +600,21 @@ class ExportService:
         if latex_bin:
             self._pdf_engine = "xelatex" if "xelatex" in latex_bin.lower() else "pdflatex"
             self._latex_engine_bin_path = latex_bin
-            logger.info(f"PDF 引擎：{self._pdf_engine} ({latex_bin})，公式由 LaTeX 原生渲染")
+            _log.info(f"PDF 引擎：{self._pdf_engine} ({latex_bin})，公式由 LaTeX 原生渲染")
         else:
             wkbin = await self._wkhtmltopdf_bin()
             if wkbin:
                 self._pdf_engine = "wkhtmltopdf"
                 self._wkhtmltopdf_bin_path = wkbin
-                logger.info(f"PDF 引擎：wkhtmltopdf ({wkbin})")
+                _log.info(f"PDF 引擎：wkhtmltopdf ({wkbin})")
             else:
                 try:
                     import weasyprint  # noqa: F401
                     self._pdf_engine = "weasyprint"
-                    logger.info("PDF 引擎：weasyprint")
+                    _log.info("PDF 引擎：weasyprint")
                 except ImportError:
                     self._pdf_engine = ""
-                    logger.warning(
+                    _log.warning(
                         "未找到 PDF 引擎（xelatex/pdflatex/wkhtmltopdf/weasyprint），"
                         "PDF 导出不可用。安装 TeX Live 可获最佳公式效果：https://www.tug.org/texlive/"
                     )
@@ -624,7 +628,7 @@ class ExportService:
             if not self._mmdc_ok:
                 self._mmdc_ok = await self._check_tool("npx", "--yes", "mmdc", "--version")
             if not self._mmdc_ok:
-                logger.info("mmdc (Mermaid CLI) 未找到，Mermaid 图表将降级为代码块")
+                _log.info("mmdc (Mermaid CLI) 未找到，Mermaid 图表将降级为代码块")
         return self._mmdc_ok
 
     # ------------------------------------------------------------------ #
@@ -654,9 +658,9 @@ class ExportService:
                 _, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
                 if proc.returncode == 0 and os.path.exists(output_file):
                     return output_file
-                logger.debug(f"mmdc cmd {cmd[0]} failed: {stderr.decode(errors='replace')[:200]}")
+                _log.debug(f"mmdc cmd {cmd[0]} failed: {stderr.decode(errors='replace')[:200]}")
             except (FileNotFoundError, asyncio.TimeoutError, OSError) as e:
-                logger.debug(f"mmdc cmd {cmd[0]} error: {e}")
+                _log.debug(f"mmdc cmd {cmd[0]} error: {e}")
 
         return None
 
@@ -693,10 +697,10 @@ class ExportService:
         templates_dir.mkdir(parents=True, exist_ok=True)
         candidate = templates_dir / f"{template}.docx"
         if candidate.exists():
-            logger.debug(f"找到模板: {candidate}")
+            _log.debug(f"找到模板: {candidate}")
             return str(candidate)
         # 模板不存在时返回 None，使用 pandoc 默认样式
-        logger.debug(f"模板 {template}.docx 不存在，使用 pandoc 默认样式")
+        _log.debug(f"模板 {template}.docx 不存在，使用 pandoc 默认样式")
         return None
 
     # ------------------------------------------------------------------ #
@@ -772,6 +776,38 @@ class ExportService:
             return {}
         snapshot = template_binding.get("configSnapshot") or {}
         return snapshot.get("layout") or {}
+
+    @staticmethod
+    def _binding_list_styles(template_binding: Optional[dict[str, Any]]) -> dict[str, Any]:
+        """获取列表样式配置"""
+        if not template_binding:
+            return {}
+        snapshot = template_binding.get("configSnapshot") or {}
+        return snapshot.get("listStyles") or {}
+
+    @staticmethod
+    def _binding_codeblock_styles(template_binding: Optional[dict[str, Any]]) -> dict[str, Any]:
+        """获取代码块样式配置"""
+        if not template_binding:
+            return {}
+        snapshot = template_binding.get("configSnapshot") or {}
+        return snapshot.get("codeBlockStyles") or {}
+
+    @staticmethod
+    def _binding_table_styles(template_binding: Optional[dict[str, Any]]) -> dict[str, Any]:
+        """获取表格样式配置"""
+        if not template_binding:
+            return {}
+        snapshot = template_binding.get("configSnapshot") or {}
+        return snapshot.get("tableStyles") or {}
+
+    @staticmethod
+    def _binding_image_styles(template_binding: Optional[dict[str, Any]]) -> dict[str, Any]:
+        """获取图片样式配置"""
+        if not template_binding:
+            return {}
+        snapshot = template_binding.get("configSnapshot") or {}
+        return snapshot.get("imageStyles") or {}
 
     def _resolve_page_size(self, page_size: str, template_binding: Optional[dict[str, Any]]) -> str:
         layout = self._binding_layout(template_binding)
@@ -851,6 +887,37 @@ class ExportService:
 
         return "\n".join(result)
 
+    def _get_codeblock_css(self, template_binding: Optional[dict[str, Any]]) -> str:
+        """生成代码块 CSS 样式"""
+        code_styles = self._binding_codeblock_styles(template_binding)
+        css_parts = []
+
+        if code_styles.get("borderColor"):
+            css_parts.append(f"  border: {code_styles.get('borderWidthPt', 0.5)}pt solid {code_styles['borderColor']};")
+        if code_styles.get("shadingColor"):
+            css_parts.append(f"  background-color: {code_styles['shadingColor']};")
+        if code_styles.get("textColor"):
+            css_parts.append(f"  color: {code_styles['textColor']};")
+
+        return "\n".join(css_parts) + "\n" if css_parts else ""
+
+    def _get_table_css(self, template_binding: Optional[dict[str, Any]]) -> str:
+        """生成表格 CSS 样式"""
+        table_styles = self._binding_table_styles(template_binding)
+        css_parts = []
+
+        border = table_styles.get("border", {})
+        if border.get("color"):
+            width = border.get("widthPt", 0.5)
+            style = border.get("style", "solid")
+            css_parts.append(f"table, th, td {{ border-color: {border['color']}; border-width: {width}pt; border-style: {style}; }}")
+
+        shading = table_styles.get("shading", {})
+        if shading.get("fill"):
+            css_parts.append(f"th {{ background-color: {shading['fill']}; }}")
+
+        return "\n".join(css_parts) + "\n" if css_parts else ""
+
     def _pdf_header_html(
         self,
         template: str,
@@ -890,10 +957,14 @@ class ExportService:
             font = self._font_display_name(s.get("fontFamily"), body_font)
             size = s.get("fontSizePt", fallback_size)
             bold = s.get("bold", True)
+            italic = s.get("italic", False)
             align = s.get("align", "left")
+            color = s.get("color") or ""
+            color_css = f"color: {color};" if color else ""
+            italic_css = "font-style: italic;" if italic else ""
             return (f"{tag} {{ font-family: \"{font}\", {cjk}; "
                     f"font-size: {size}pt; font-weight: {_fw(bold)}; "
-                    f"text-align: {align}; }}\n")
+                    f"{italic_css} {color_css} text-align: {align}; }}\n")
 
         title_font = self._font_display_name(title_style.get("fontFamily"), body_font)
         title_size = title_style.get("fontSizePt", 20)
@@ -921,11 +992,19 @@ class ExportService:
             "  border-radius: 3px;\n"
             "  padding: 0 3px;\n"
             "}\n"
-            "pre { padding: 8px 12px; overflow-x: auto; }\n"
+            "pre {\n"
+            "  padding: 8px 12px;\n"
+            "  overflow-x: auto;\n"
+            + self._get_codeblock_css(template_binding)
+            + "}\n"
             "table { border-collapse: collapse; width: 100%; }\n"
-            "th, td { border: 1px solid #ccc; padding: 6px 10px; }\n"
+            "th, td {\n"
+            "  border: 1px solid #ccc;\n"
+            "  padding: 6px 10px;\n"
+            "}\n"
             "th { background: #f0f0f0; }\n"
-            "</style>\n"
+            + self._get_table_css(template_binding)
+            + "</style>\n"
         )
 
     def _pdf_header_latex(
@@ -1069,7 +1148,7 @@ class ExportService:
                 return arg
 
             quoted_cmd = [quote_arg(arg) for arg in cmd]
-            logger.info(f"PDF 导出引擎={engine}，命令: {' '.join(quoted_cmd)}")
+            _log.info(f"PDF 导出引擎={engine}，命令: {' '.join(quoted_cmd)}")
             cmd_str = " ".join(quoted_cmd)
             try:
                 loop = asyncio.get_event_loop()
@@ -1081,18 +1160,18 @@ class ExportService:
             except subprocess.TimeoutExpired:
                 raise RuntimeError("PDF 转换超时（120s），请减少文档内容后重试")
             except FileNotFoundError as e:
-                logger.error(f"PDF 导出失败: 命令未找到 - {e}")
+                _log.error(f"PDF 导出失败: 命令未找到 - {e}")
                 raise RuntimeError(f"PDF 导出失败: {e}")
             except OSError as e:
-                logger.error(f"PDF 导出失败: OS错误 - {e}")
+                _log.error(f"PDF 导出失败: OS错误 - {e}")
                 raise RuntimeError(f"PDF 导出失败: {e}")
             except Exception as e:
-                logger.exception(f"PDF 导出未知异常: {type(e).__name__}: {e}")
+                _log.exception(f"PDF 导出未知异常: {type(e).__name__}: {e}")
                 raise RuntimeError(f"PDF 导出失败: {e}")
 
             if proc.returncode != 0:
                 err = stderr.decode("utf-8", errors="replace")
-                logger.error(f"PDF 导出失败 (exit {proc.returncode}): {err[:500]}")
+                _log.error(f"PDF 导出失败 (exit {proc.returncode}): {err[:500]}")
                 raise RuntimeError(f"PDF 转换失败：{err[:300]}")
 
             # 5. 读取并返回 PDF 字节
@@ -1151,7 +1230,7 @@ class ExportService:
             ref_doc = self._reference_doc(template)
             if ref_doc:
                 cmd.extend(["--reference-doc", ref_doc])
-                logger.debug(f"使用模板：{ref_doc}")
+                _log.debug(f"使用模板：{ref_doc}")
 
             # 4. 执行 pandoc
             # Windows 上需要使用 shell 来正确执行 PATH 中的可执行文件
@@ -1162,11 +1241,11 @@ class ExportService:
                 return path
 
             quoted_cmd = [quote_path(arg) if i == 0 else arg for i, arg in enumerate(cmd)]
-            logger.info(f"执行 pandoc: {' '.join(quoted_cmd)}")
-            logger.info(f"临时目录: {tmpdir}")
-            logger.info(f"输入文件: {input_path}")
+            _log.info(f"执行 pandoc: {' '.join(quoted_cmd)}")
+            _log.info(f"临时目录: {tmpdir}")
+            _log.info(f"输入文件: {input_path}")
             # 打印输入 markdown 内容的调试日志（截取前500字符）
-            logger.info(f"输入 markdown (前500字符): {processed[:500]}")
+            _log.info(f"输入 markdown (前500字符): {processed[:500]}")
             
             # 使用 run_in_executor 在线程池中执行子进程
             # 避免 Windows + uvicorn reload 模式下的 NotImplementedError
@@ -1174,7 +1253,7 @@ class ExportService:
             from functools import partial
             
             try:
-                logger.info("准备在线程池中执行 pandoc...")
+                _log.info("准备在线程池中执行 pandoc...")
                 # 构建命令字符串
                 cmd_str = " ".join(quoted_cmd)
                 loop = asyncio.get_event_loop()
@@ -1185,29 +1264,29 @@ class ExportService:
                 )
                 stdout = proc.stdout
                 stderr = proc.stderr
-                logger.info(f"pandoc 执行完成, returncode={proc.returncode}")
+                _log.info(f"pandoc 执行完成, returncode={proc.returncode}")
             except subprocess.TimeoutExpired:
-                logger.error("Pandoc 执行超时")
+                _log.error("Pandoc 执行超时")
                 raise RuntimeError("Pandoc 转换超时（90s），请减少文档内容后重试")
             except FileNotFoundError as e:
-                logger.error(f"Pandoc 执行失败: 命令未找到 - {e}")
+                _log.error(f"Pandoc 执行失败: 命令未找到 - {e}")
                 raise RuntimeError(f"Pandoc 未找到: {e}")
             except OSError as e:
-                logger.error(f"Pandoc 执行失败: OS错误 - {e}")
+                _log.error(f"Pandoc 执行失败: OS错误 - {e}")
                 raise RuntimeError(f"Pandoc 执行失败: {e}")
             except Exception as e:
-                logger.exception(f"Pandoc 执行未知异常: {type(e).__name__}: {e}")
+                _log.exception(f"Pandoc 执行未知异常: {type(e).__name__}: {e}")
                 raise RuntimeError(f"Pandoc 执行失败: {e}")
 
             # 调试：打印 pandoc 输出
             try:
                 stdout_decoded = stdout.decode("utf-8", errors="replace") if stdout else ""
                 stderr_decoded = stderr.decode("utf-8", errors="replace") if stderr else ""
-                logger.info(f"Pandoc stdout: {stdout_decoded[:1000]}")
-                logger.info(f"Pandoc stderr: {stderr_decoded[:1000]}")
-                logger.info(f"Pandoc returncode: {proc.returncode}")
+                _log.info(f"Pandoc stdout: {stdout_decoded[:1000]}")
+                _log.info(f"Pandoc stderr: {stderr_decoded[:1000]}")
+                _log.info(f"Pandoc returncode: {proc.returncode}")
             except Exception as e:
-                logger.error(f"解析 pandoc 输出失败: {e}, stdout={stdout}, stderr={stderr}")
+                _log.error(f"解析 pandoc 输出失败: {e}, stdout={stdout}, stderr={stderr}")
 
             # 检查返回码
             if proc.returncode != 0:
@@ -1221,14 +1300,14 @@ class ExportService:
             try:
                 self._apply_docx_font(output_path, template_binding=template_binding)
             except Exception as e:
-                logger.warning(f"设置字体失败，跳过: {e}")
+                _log.warning(f"设置字体失败，跳过: {e}")
 
             # 6. 读取并返回 docx 字节
             try:
                 with open(output_path, "rb") as f:
                     return f.read()
             except Exception as e:
-                logger.error(f"读取 docx 文件失败: {e}")
+                _log.error(f"读取 docx 文件失败: {e}")
                 raise RuntimeError(f"读取导出文件失败: {e}")
 
     _MATH_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
@@ -1271,7 +1350,7 @@ class ExportService:
             from docx.oxml import OxmlElement
             from docx.oxml.ns import qn
         except ImportError:
-            logger.warning("python-docx 未安装，跳过字体设置；可运行 pip install python-docx")
+            _log.warning("python-docx 未安装，跳过字体设置；可运行 pip install python-docx")
             return
 
         try:
@@ -1282,9 +1361,9 @@ class ExportService:
             layout_cfg = self._binding_layout(template_binding)
             
             # 调试日志：打印接收到的模板配置
-            logger.info(f"[_apply_docx_font] styles_cfg keys: {list(styles_cfg.keys())}")
-            logger.info(f"[_apply_docx_font] heading_1 bold: {styles_cfg.get('heading_1', {}).get('bold', 'NOT_FOUND')}")
-            logger.info(f"[_apply_docx_font] heading_1 full: {styles_cfg.get('heading_1', {})}")
+            _log.info(f"[_apply_docx_font] styles_cfg keys: {list(styles_cfg.keys())}")
+            _log.info(f"[_apply_docx_font] heading_1 bold: {styles_cfg.get('heading_1', {}).get('bold', 'NOT_FOUND')}")
+            _log.info(f"[_apply_docx_font] heading_1 full: {styles_cfg.get('heading_1', {})}")
             
             body_cfg     = styles_cfg.get("body", {})
             title_cfg    = styles_cfg.get("document_title", {})
@@ -1300,21 +1379,21 @@ class ExportService:
             )
             default_body_size = body_cfg.get("fontSizePt", 12)
             # 调试日志：打印页面布局配置
-            logger.info(f"[_apply_docx_font] layout_cfg: marginTop={layout_cfg.get('marginTopMm')}, marginBottom={layout_cfg.get('marginBottomMm')}, marginLeft={layout_cfg.get('marginLeftMm')}, marginRight={layout_cfg.get('marginRightMm')}")
-            logger.info(f"[_apply_docx_font] layout_cfg: defaultLineHeight={layout_cfg.get('defaultLineHeight')}, body.lineHeight={body_cfg.get('lineHeight')}")
+            _log.info(f"[_apply_docx_font] layout_cfg: marginTop={layout_cfg.get('marginTopMm')}, marginBottom={layout_cfg.get('marginBottomMm')}, marginLeft={layout_cfg.get('marginLeftMm')}, marginRight={layout_cfg.get('marginRightMm')}")
+            _log.info(f"[_apply_docx_font] layout_cfg: defaultLineHeight={layout_cfg.get('defaultLineHeight')}, body.lineHeight={body_cfg.get('lineHeight')}")
             default_line_height = layout_cfg.get("defaultLineHeight") or body_cfg.get(
                 "lineHeight", 1.75
             )
-            logger.info(f"[_apply_docx_font] 最终使用: default_line_height={default_line_height}")
+            _log.info(f"[_apply_docx_font] 最终使用: default_line_height={default_line_height}")
             default_first_indent = layout_cfg.get("defaultFirstLineIndentChars")
             if default_first_indent is None:
                 default_first_indent = body_cfg.get("firstLineIndentChars", 0)
-            logger.info(f"[_apply_docx_font] 最终使用: default_first_indent={default_first_indent} chars")
-            logger.info(f"[_apply_docx_font] 最终使用: default_cjk_font={default_cjk_font}, default_body_size={default_body_size}")
+            _log.info(f"[_apply_docx_font] 最终使用: default_first_indent={default_first_indent} chars")
+            _log.info(f"[_apply_docx_font] 最终使用: default_cjk_font={default_cjk_font}, default_body_size={default_body_size}")
             
             # 调试：打印 title_cfg
-            logger.info(f"[_apply_docx_font] title_cfg: {title_cfg}")
-            logger.info(f"[_apply_docx_font] body_cfg: fontFamily={body_cfg.get('fontFamily')}, fontSizePt={body_cfg.get('fontSizePt')}, bold={body_cfg.get('bold')}, lineHeight={body_cfg.get('lineHeight')}, firstLineIndentChars={body_cfg.get('firstLineIndentChars')}")
+            _log.info(f"[_apply_docx_font] title_cfg: {title_cfg}")
+            _log.info(f"[_apply_docx_font] body_cfg: fontFamily={body_cfg.get('fontFamily')}, fontSizePt={body_cfg.get('fontSizePt')}, bold={body_cfg.get('bold')}, lineHeight={body_cfg.get('lineHeight')}, firstLineIndentChars={body_cfg.get('firstLineIndentChars')}")
 
             # 样式名 → 中文字体映射（用于 run 级别按段落样式选字体）
             _style_font_map: dict[str, str] = {
@@ -1375,7 +1454,7 @@ class ExportService:
                 style_id = pStyle.get(qn("w:val"), "")
                 return self._WORD_STYLE_ID_MAP.get(style_id, "Normal")
 
-            def set_font_properties(rPr_elem, east_asia: str, ascii: str = None, h_ansi: str = None, bold: bool = None):
+            def set_font_properties(rPr_elem, east_asia: str, ascii: str = None, h_ansi: str = None, bold: bool = None, italic: bool = None, color: str = None):
                 """设置段落/文本的字体属性"""
                 rFonts_elem = rPr_elem.find(qn("w:rFonts"))
                 if rFonts_elem is None:
@@ -1398,6 +1477,23 @@ class ExportService:
                             elem = OxmlElement(tag_name)
                             rPr_elem.append(elem)
                         elem.set(qn("w:val"), "1" if bold else "0")
+
+                # 设置斜体（仅当明确指定时）
+                if italic is not None:
+                    for tag_name in ("w:i", "w:iCs"):
+                        elem = rPr_elem.find(qn(tag_name))
+                        if elem is None:
+                            elem = OxmlElement(tag_name)
+                            rPr_elem.append(elem)
+                        elem.set(qn("w:val"), "1" if italic else "0")
+
+                # 设置颜色（仅当明确指定时）
+                if color:
+                    elem = rPr_elem.find(qn("w:color"))
+                    if elem is None:
+                        elem = OxmlElement("w:color")
+                        rPr_elem.append(elem)
+                    elem.set(qn("w:val"), color.lstrip("#"))
 
             # ── 1. docDefaults：文档级全局默认 ──────────────────────────────────
             styles_elem = doc.styles.element
@@ -1488,7 +1584,7 @@ class ExportService:
                         if child.tag == qn("w:t"):
                             run_text = (child.text or "")[:20]
                             break
-                logger.debug(f"[_normalize_rpr] run='{run_text}...', style={style_name}, bold={bold}")
+                _log.debug(f"[_normalize_rpr] run='{run_text}...', style={style_name}, bold={bold}")
                 
                 set_font_properties(rPr_elem_inner, font, "Times New Roman", "Times New Roman", None)  # 不覆盖粗体，保留原有设置
                 sz = rPr_elem_inner.find(qn("w:sz"))
@@ -1511,12 +1607,12 @@ class ExportService:
                         existing_b = OxmlElement("w:b")
                         rPr_elem_inner.append(existing_b)
                     existing_b.set(qn("w:val"), "1")
-                    logger.debug(f"[_normalize_rpr] run='{run_text}...' 设置加粗 bold=True, style={style_name}")
+                    _log.debug(f"[_normalize_rpr] run='{run_text}...' 设置加粗 bold=True, style={style_name}")
                 else:
                     # 模板要求不加粗，如果没有原始 w:b 则不加粗
                     # 如果有原始 w:b，保留原值（可能用户想保留原始格式）
                     if existing_b is not None:
-                        logger.debug(f"[_normalize_rpr] run='{run_text}...' 保留原始 w:b, bold=False, style={style_name}")
+                        _log.debug(f"[_normalize_rpr] run='{run_text}...' 保留原始 w:b, bold=False, style={style_name}")
                 
                 # 同样处理 w:bCs（复杂脚本粗体）
                 existing_b_cs = rPr_elem_inner.find(qn("w:bCs"))
@@ -1628,8 +1724,8 @@ class ExportService:
                     _normalize_rpr(rPr_run, run_elem=el)
 
             # 调试日志：打印样式匹配统计
-            logger.info(f"[_apply_docx_font] 样式匹配统计: {style_match_count}")
-            logger.info(f"[_apply_docx_font] _style_bold_map: {_style_bold_map}")
+            _log.info(f"[_apply_docx_font] 样式匹配统计: {style_match_count}")
+            _log.info(f"[_apply_docx_font] _style_bold_map: {_style_bold_map}")
 
             # ── 4. 段落级 pPr/rPr（列表缩进等带来的主题色）──────────────────────
             for root in xml_roots:
@@ -1681,12 +1777,12 @@ class ExportService:
                 font_bold = _to_bool(cfg.get("bold"), False)  # 使用 _to_bool 转换
                 align_cfg = cfg.get("align", "left")
                 align = _ALIGN_MAP.get(align_cfg)
-                logger.info(f"[_force_paragraph_template_style] 段落='{paragraph.text[:20]}...', align_cfg={align_cfg}, align={align}, font={font_name}, size={font_size}, bold={font_bold}")
+                _log.info(f"[_force_paragraph_template_style] 段落='{paragraph.text[:20]}...', align_cfg={align_cfg}, align={align}, font={font_name}, size={font_size}, bold={font_bold}")
                 
                 pf = paragraph.paragraph_format
                 if align is not None:
                     pf.alignment = align
-                    logger.info(f"[_force_paragraph_template_style] 已设置对齐: {align}")
+                    _log.info(f"[_force_paragraph_template_style] 已设置对齐: {align}")
                 pf.line_spacing = cfg.get("lineHeight", default_line_height)
                 pf.space_before = Pt(cfg.get("spacingBeforePt", layout_cfg.get("defaultParagraphSpacingBeforePt", 0)))
                 pf.space_after = Pt(cfg.get("spacingAfterPt", layout_cfg.get("defaultParagraphSpacingAfterPt", 0)))
@@ -1754,10 +1850,10 @@ class ExportService:
                 title_font_name = self._font_display_name(title_cfg.get("fontFamily"), default_cjk_font)
                 title_size = title_cfg.get("fontSizePt", default_body_size)
                 title_bold = _to_bool(title_cfg.get("bold"), False)  # 使用 _to_bool 转换
-                logger.info(f"[_apply_docx_font] title处理: align={title_cfg.get('align')}, title_align={title_align}, font={title_font_name}, size={title_size}, bold={title_bold}, bold_raw={repr(title_cfg.get('bold'))}")
+                _log.info(f"[_apply_docx_font] title处理: align={title_cfg.get('align')}, title_align={title_align}, font={title_font_name}, size={title_size}, bold={title_bold}, bold_raw={repr(title_cfg.get('bold'))}")
 
                 # 调试：打印前5个段落的信息
-                logger.info(f"[_apply_docx_font] === 前5个段落信息 ===")
+                _log.info(f"[_apply_docx_font] === 前5个段落信息 ===")
                 for i, paragraph in enumerate(doc.paragraphs[:5]):
                     text = paragraph.text.strip()[:30]
                     style_name = paragraph.style.name
@@ -1765,15 +1861,15 @@ class ExportService:
                     run_info = []
                     for run in paragraph.runs:
                         run_info.append(f"'{run.text[:10]}...' bold={run.bold}")
-                    logger.info(f"  段落{i}: style={style_name}, text='{text}...', runs=[{', '.join(run_info)}]")
-                logger.info(f"[_apply_docx_font] ==========================")
+                    _log.info(f"  段落{i}: style={style_name}, text='{text}...', runs=[{', '.join(run_info)}]")
+                _log.info(f"[_apply_docx_font] ==========================")
 
                 # 1. 先找 First Paragraph 样式（Pandoc 生成的文档标题常用此样式）
                 title_paragraph = None
                 for paragraph in doc.paragraphs:
                     if paragraph.style.name == "First Paragraph" and paragraph.text.strip():
                         title_paragraph = paragraph
-                        logger.info(f"[_apply_docx_font] 找到 First Paragraph 段落: '{paragraph.text[:30]}...'")
+                        _log.info(f"[_apply_docx_font] 找到 First Paragraph 段落: '{paragraph.text[:30]}...'")
                         break
                 
                 # 2. 再找 Title 样式
@@ -1781,7 +1877,7 @@ class ExportService:
                     for paragraph in doc.paragraphs:
                         if paragraph.style.name == "Title" and paragraph.text.strip():
                             title_paragraph = paragraph
-                            logger.info(f"[_apply_docx_font] 找到 Title 段落: '{paragraph.text[:30]}...'")
+                            _log.info(f"[_apply_docx_font] 找到 Title 段落: '{paragraph.text[:30]}...'")
                             break
                 
                 # 3. 找第一个非 Heading 1/2/3... 的段落，且文本较短（可能是标题而非正文）
@@ -1798,12 +1894,12 @@ class ExportService:
                         # 文本较短的可能是标题
                         if len(text) <= max_title_len:
                             title_paragraph = paragraph
-                            logger.info(f"[_apply_docx_font] 找到短文本段落（非Heading）: '{paragraph.text[:30]}...', style={style}")
+                            _log.info(f"[_apply_docx_font] 找到短文本段落（非Heading）: '{paragraph.text[:30]}...', style={style}")
                             break
                 
                 # 4. 找第一个 Bold 段落
                 if title_paragraph is None:
-                    logger.info(f"[_apply_docx_font] 未找到 First Paragraph/Title/短文本段落，开始查找 Bold 段落...")
+                    _log.info(f"[_apply_docx_font] 未找到 First Paragraph/Title/短文本段落，开始查找 Bold 段落...")
                     for i, paragraph in enumerate(doc.paragraphs):
                         text = paragraph.text.strip()
                         if not text:
@@ -1813,21 +1909,21 @@ class ExportService:
                         for run in paragraph.runs:
                             if run.bold:
                                 is_bold = True
-                                logger.info(f"[_apply_docx_font] 段落 {i}: '{text[:20]}...' 是 Bold, style={paragraph.style.name}, run.bold={run.bold}")
+                                _log.info(f"[_apply_docx_font] 段落 {i}: '{text[:20]}...' 是 Bold, style={paragraph.style.name}, run.bold={run.bold}")
                                 break
                         if is_bold and text:
                             title_paragraph = paragraph
-                            logger.info(f"[_apply_docx_font] 找到 Bold 段落: '{paragraph.text[:30]}...', style={paragraph.style.name}")
+                            _log.info(f"[_apply_docx_font] 找到 Bold 段落: '{paragraph.text[:30]}...', style={paragraph.style.name}")
                             break
                     if title_paragraph is None:
-                        logger.info(f"[_apply_docx_font] 未找到 Bold 段落")
+                        _log.info(f"[_apply_docx_font] 未找到 Bold 段落")
                 
                 # 5. 最后才找 Heading 1
                 if title_paragraph is None:
                     for paragraph in doc.paragraphs:
                         if paragraph.style.name == "Heading 1" and paragraph.text.strip():
                             title_paragraph = paragraph
-                            logger.info(f"[_apply_docx_font] 找到 Heading 1 段落: '{paragraph.text[:30]}...'")
+                            _log.info(f"[_apply_docx_font] 找到 Heading 1 段落: '{paragraph.text[:30]}...'")
                             break
                 
                 # 6. 兜底：找第一个非空段落
@@ -1835,17 +1931,17 @@ class ExportService:
                     for paragraph in doc.paragraphs:
                         if paragraph.text.strip():
                             title_paragraph = paragraph
-                            logger.info(f"[_apply_docx_font] 兜底找到段落: '{paragraph.text[:30]}...', style={paragraph.style.name}")
+                            _log.info(f"[_apply_docx_font] 兜底找到段落: '{paragraph.text[:30]}...', style={paragraph.style.name}")
                             break
                 
-                logger.info(f"[_apply_docx_font] title段落: {title_paragraph.text[:30] if title_paragraph else 'None'}, 当前样式={title_paragraph.style.name if title_paragraph else 'N/A'}")
+                _log.info(f"[_apply_docx_font] title段落: {title_paragraph.text[:30] if title_paragraph else 'None'}, 当前样式={title_paragraph.style.name if title_paragraph else 'N/A'}")
 
                 if title_paragraph is not None:
                     try:
                         _force_paragraph_template_style(title_paragraph, title_cfg)
-                        logger.info(f"[_apply_docx_font] 已应用title样式到段落")
+                        _log.info(f"[_apply_docx_font] 已应用title样式到段落")
                     except Exception as e:
-                        logger.error(f"[_apply_docx_font] 应用title样式失败: {e}")
+                        _log.error(f"[_apply_docx_font] 应用title样式失败: {e}")
 
             # 教案标题兜底：不依赖 Pandoc heading 样式，直接按文本形态套模板槽位。
             top_heading_re = re.compile(r"^\s*[一二三四五六七八九十]+、\s*.+$")
@@ -1865,8 +1961,8 @@ class ExportService:
             # ── 5. 添加页脚页码 ─────────────────────────────────────────────────
             page_cfg = layout_cfg.get("pageNumber", {})
             page_number_style = styles_cfg.get("page_number", {})
-            logger.info(f"[_apply_docx_font] page_number_style: {page_number_style}")
-            logger.info(f"[_apply_docx_font] layout.pageNumber: {page_cfg}")
+            _log.info(f"[_apply_docx_font] page_number_style: {page_number_style}")
+            _log.info(f"[_apply_docx_font] layout.pageNumber: {page_cfg}")
             if page_cfg.get("enabled", True):
                 # 获取页码样式自己的字体和对齐方式，而不是使用 layout 中的值
                 page_font = self._font_display_name(
@@ -1884,11 +1980,11 @@ class ExportService:
                 )
 
             doc.save(docx_path)
-            logger.info(
+            _log.info(
                 f"docx 已应用模板字体与页面参数，正文中文字体={default_cjk_font}"
             )
         except Exception as e:
-            logger.warning(f"设置 docx 字体失败，跳过此步骤: {e}")
+            _log.warning(f"设置 docx 字体失败，跳过此步骤: {e}")
             # 字体设置失败不影响导出，文件已生成
 
     def _add_page_number_footer(
@@ -2020,9 +2116,9 @@ class ExportService:
                         # 将 rPr 插入到 run 的开头
                         run._r.insert(0, rPr)
 
-                logger.debug(f"已添加页脚页码: font={font_name}, size={font_size_pt}, align={align}")
+                _log.debug(f"已添加页脚页码: font={font_name}, size={font_size_pt}, align={align}")
             except Exception as e:
-                logger.warning(f"添加页脚页码失败: {e}")
+                _log.warning(f"添加页脚页码失败: {e}")
                 continue
 
 
