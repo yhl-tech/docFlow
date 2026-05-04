@@ -156,10 +156,20 @@ async def export_docx(
     
     # 调试：打印完整的请求体
     import json
-    logger.info(f"[export_docx] 收到的请求体 keys: {list(body.model_dump().keys())}")
+    logger.info(f"[export_docx] === 后端收到请求 ===")
+    logger.info(f"[export_docx] body.model_dump() keys: {list(body.model_dump().keys())}")
+    logger.info(f"[export_docx] body.template = {body.template}")
     logger.info(f"[export_docx] body.template_binding = {body.template_binding}")
     if body.template_binding:
-        logger.info(f"[export_docx] body.template_binding.configSnapshot keys: {list(body.template_binding.get('configSnapshot', {}).get('styles', {}).keys())}")
+        logger.info(f"[export_docx] configSnapshot styles keys: {list(body.template_binding.get('configSnapshot', {}).get('styles', {}).keys())}")
+        styles = body.template_binding.get('configSnapshot', {}).get('styles', {})
+        layout = body.template_binding.get('configSnapshot', {}).get('layout', {})
+        logger.info(f"[export_docx] heading_1 config: {styles.get('heading_1', {})}")
+        logger.info(f"[export_docx] body config: {styles.get('body', {})}")
+        logger.info(f"[export_docx] layout config: {layout}")
+        logger.info(f"[export_docx] pageNumber config: {layout.get('pageNumber', {})}")
+        logger.info(f"[export_docx] marginTopMm: {layout.get('marginTopMm', 'NOT_SET')}")
+        logger.info(f"[export_docx] =======================")
 
     # 记录本次导出的扣费方式，用于失败时对称退还
     deduction_type: list = []

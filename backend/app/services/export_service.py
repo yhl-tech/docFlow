@@ -725,11 +725,13 @@ class ExportService:
         "FangSong_GB2312":  "仿宋_GB2312",
         "FangSong":         "仿宋",
         "STFangsong":       "华文仿宋",
+        "STSong":           "华文宋体",
         # ── 黑体系 ──
         "SimHei":           "黑体",
         "HuaWenHeiTi":      "华文黑体",
         "Microsoft YaHei":  "微软雅黑",
         "DengXian":         "等线",
+        "DengXianDot":      "等线",
         # ── 楷体系 ──
         "KaiTi_GB2312":     "楷体_GB2312",
         "KaiTi":            "楷体",
@@ -738,8 +740,11 @@ class ExportService:
         "FZXiaoBiaoSong":   "方正小标宋",
         "SimSun":           "宋体",
         "NSimSun":          "新宋体",
-        "STSong":           "华文宋体",
         "STZhongsong":      "华文中宋",
+        # ── 其他常用字体 ──
+        "Arial":            "Arial",
+        "Times New Roman":   "Times New Roman",
+        "Courier New":      "Courier New",
     }
 
     # Pandoc 生成的 docx 中 pStyle w:val 与样式名的映射
@@ -1276,16 +1281,28 @@ class ExportService:
 
         try:
             from docx.shared import Mm, Pt
+            from docx import Document
 
             doc = Document(docx_path)
             styles_cfg = self._binding_styles(template_binding)
             layout_cfg = self._binding_layout(template_binding)
-            
+
             # 调试日志：打印接收到的模板配置
+            logger.info(f"[_apply_docx_font] === 开始应用模板配置 ===")
             logger.info(f"[_apply_docx_font] styles_cfg keys: {list(styles_cfg.keys())}")
-            logger.info(f"[_apply_docx_font] heading_1 bold: {styles_cfg.get('heading_1', {}).get('bold', 'NOT_FOUND')}")
-            logger.info(f"[_apply_docx_font] heading_1 full: {styles_cfg.get('heading_1', {})}")
-            
+            logger.info(f"[_apply_docx_font] layout_cfg: {layout_cfg}")
+            logger.info(f"[_apply_docx_font] heading_1: {styles_cfg.get('heading_1', {})}")
+            logger.info(f"[_apply_docx_font] heading_1.bold: {styles_cfg.get('heading_1', {}).get('bold', 'NOT_SET')}")
+            logger.info(f"[_apply_docx_font] heading_1.align: {styles_cfg.get('heading_1', {}).get('align', 'NOT_SET')}")
+            logger.info(f"[_apply_docx_font] heading_1.fontFamily: {styles_cfg.get('heading_1', {}).get('fontFamily', 'NOT_SET')}")
+            logger.info(f"[_apply_docx_font] heading_1.fontSizePt: {styles_cfg.get('heading_1', {}).get('fontSizePt', 'NOT_SET')}")
+            logger.info(f"[_apply_docx_font] body: {styles_cfg.get('body', {})}")
+            logger.info(f"[_apply_docx_font] body.bold: {styles_cfg.get('body', {}).get('bold', 'NOT_SET')}")
+            logger.info(f"[_apply_docx_font] body.align: {styles_cfg.get('body', {}).get('align', 'NOT_SET')}")
+            logger.info(f"[_apply_docx_font] pageNumber: {layout_cfg.get('pageNumber', {})}")
+            logger.info(f"[_apply_docx_font] marginTopMm: {layout_cfg.get('marginTopMm', 'NOT_SET')}")
+            logger.info(f"[_apply_docx_font] =======================")
+
             body_cfg     = styles_cfg.get("body", {})
             title_cfg    = styles_cfg.get("document_title", {})
             subtitle_cfg = styles_cfg.get("document_subtitle", {})
@@ -1300,21 +1317,13 @@ class ExportService:
             )
             default_body_size = body_cfg.get("fontSizePt", 12)
             # 调试日志：打印页面布局配置
-            logger.info(f"[_apply_docx_font] layout_cfg: marginTop={layout_cfg.get('marginTopMm')}, marginBottom={layout_cfg.get('marginBottomMm')}, marginLeft={layout_cfg.get('marginLeftMm')}, marginRight={layout_cfg.get('marginRightMm')}")
-            logger.info(f"[_apply_docx_font] layout_cfg: defaultLineHeight={layout_cfg.get('defaultLineHeight')}, body.lineHeight={body_cfg.get('lineHeight')}")
+            logger.info(f"[_apply_docx_font] default_cjk_font={default_cjk_font}, default_body_size={default_body_size}")
             default_line_height = layout_cfg.get("defaultLineHeight") or body_cfg.get(
                 "lineHeight", 1.75
             )
-            logger.info(f"[_apply_docx_font] 最终使用: default_line_height={default_line_height}")
             default_first_indent = layout_cfg.get("defaultFirstLineIndentChars")
             if default_first_indent is None:
                 default_first_indent = body_cfg.get("firstLineIndentChars", 0)
-            logger.info(f"[_apply_docx_font] 最终使用: default_first_indent={default_first_indent} chars")
-            logger.info(f"[_apply_docx_font] 最终使用: default_cjk_font={default_cjk_font}, default_body_size={default_body_size}")
-            
-            # 调试：打印 title_cfg
-            logger.info(f"[_apply_docx_font] title_cfg: {title_cfg}")
-            logger.info(f"[_apply_docx_font] body_cfg: fontFamily={body_cfg.get('fontFamily')}, fontSizePt={body_cfg.get('fontSizePt')}, bold={body_cfg.get('bold')}, lineHeight={body_cfg.get('lineHeight')}, firstLineIndentChars={body_cfg.get('firstLineIndentChars')}")
 
             # 样式名 → 中文字体映射（用于 run 级别按段落样式选字体）
             _style_font_map: dict[str, str] = {
@@ -1559,17 +1568,22 @@ class ExportService:
                 "Title":     title_cfg,
                 "Subtitle":  subtitle_cfg,
             }
+            logger.info(f"[_apply_docx_font] heading_style_map配置: {heading_style_map}")
             for style_name, cfg in heading_style_map.items():
                 if not cfg:
+                    logger.info(f"[_apply_docx_font] 样式 {style_name} 无配置，跳过")
                     continue
+                logger.info(f"[_apply_docx_font] 处理样式 {style_name}: cfg={cfg}, align={cfg.get('align', 'left')}")
                 try:
                     style = doc.styles[style_name]
                     style.font.size = Pt(cfg.get("fontSizePt", default_body_size))
                     style.font.bold = bool(cfg.get("bold", False))
                     align_val = _ALIGN_MAP.get(cfg.get("align", "left"))
+                    logger.info(f"[_apply_docx_font] 样式 {style_name} 对齐: {cfg.get('align')} -> {align_val}")
                     if align_val is not None:
                         style.paragraph_format.alignment = align_val
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"[_apply_docx_font] 样式 {style_name} 处理失败: {e}")
                     pass
 
             for section in doc.sections:
@@ -1627,9 +1641,12 @@ class ExportService:
                     style_match_count[style_name] = style_match_count.get(style_name, 0) + 1
                     _normalize_rpr(rPr_run, run_elem=el)
 
-            # 调试日志：打印样式匹配统计
-            logger.info(f"[_apply_docx_font] 样式匹配统计: {style_match_count}")
+            # 调试日志：打印样式映射
+            logger.info(f"[_apply_docx_font] === 样式映射配置 ===")
+            logger.info(f"[_apply_docx_font] _style_font_map: {_style_font_map}")
             logger.info(f"[_apply_docx_font] _style_bold_map: {_style_bold_map}")
+            logger.info(f"[_apply_docx_font] _style_size_map: {_style_size_map}")
+            logger.info(f"[_apply_docx_font] =======================")
 
             # ── 4. 段落级 pPr/rPr（列表缩进等带来的主题色）──────────────────────
             for root in xml_roots:
@@ -1665,11 +1682,20 @@ class ExportService:
                     paragraph.paragraph_format.space_after = Pt(
                         cfg.get("spacingAfterPt", layout_cfg.get("defaultParagraphSpacingAfterPt", 0))
                     )
+                    # 应用模板配置的对齐方式
+                    align_val = cfg.get("align")
+                    if align_val and _ALIGN_MAP.get(align_val):
+                        old_align = paragraph.paragraph_format.alignment
+                        paragraph.paragraph_format.alignment = _ALIGN_MAP[align_val]
+                        logger.info(f"[_apply_docx_font] 段落对齐: style={paragraph.style.name}, text='{paragraph.text[:30]}...', align={align_val}, old_align={old_align}, new_align={paragraph.paragraph_format.alignment}")
+                    else:
+                        logger.debug(f"[_apply_docx_font] 段落不对齐: style={paragraph.style.name}, text='{paragraph.text[:30]}...', align_val={align_val}, _ALIGN_MAP.get(align_val)={_ALIGN_MAP.get(align_val) if align_val else None}")
                     if paragraph.style.name == "Normal":
                         paragraph.paragraph_format.first_line_indent = Pt(
                             default_body_size * default_first_indent
                         )
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"[_apply_docx_font] 段落格式设置失败: {e}")
                     pass
 
             def _force_paragraph_template_style(paragraph, cfg: dict[str, Any], *, clear_indent: bool = True) -> None:
@@ -1714,7 +1740,8 @@ class ExportService:
                     if jc is None:
                         jc = OxmlElement("w:jc")
                         pPr.append(jc)
-                    jc.set(qn("w:val"), cfg.get("align", "left"))
+                    # 使用 align_cfg 字符串值（更可靠）
+                    jc.set(qn("w:val"), align_cfg)
 
                 for run in paragraph.runs:
                     run.font.size = Pt(font_size)
@@ -1862,36 +1889,65 @@ class ExportService:
                 except Exception:
                     pass
 
-            # ── 5. 添加页脚页码 ─────────────────────────────────────────────────
+            # ── 5. 添加页码 ─────────────────────────────────────────────────
             page_cfg = layout_cfg.get("pageNumber", {})
             page_number_style = styles_cfg.get("page_number", {})
-            logger.info(f"[_apply_docx_font] page_number_style: {page_number_style}")
-            logger.info(f"[_apply_docx_font] layout.pageNumber: {page_cfg}")
+            logger.info(f"[_apply_docx_font] === 页码配置 ===")
+            logger.info(f"[_apply_docx_font] page_number_style (from styles): {page_number_style}")
+            logger.info(f"[_apply_docx_font] page_cfg (from layout): {page_cfg}")
+            
+            # 调试：打印配置来源
+            logger.info(f"[_apply_docx_font] layout.pageNumber position: {page_cfg.get('position', 'bottom')}")
+            logger.info(f"[_apply_docx_font] layout.pageNumber align: {page_cfg.get('align', 'center')}")
+            logger.info(f"[_apply_docx_font] layout.pageNumber fontSizePt: {page_cfg.get('fontSizePt', 12)}")
+            logger.info(f"[_apply_docx_font] layout.pageNumber fontFamily: {page_cfg.get('fontFamily', 'NOT_SET')}")
+            
+            # 优先使用 layout.pageNumber 的配置（用户在模板面板 UI 上设置的）
+            # 只有当 layout.pageNumber 没有配置时，才回退到 styles.page_number
+            page_position = page_cfg.get("position", "bottom")
+            page_align = page_cfg.get("align", "center")
+            page_font_family = page_cfg.get("fontFamily")
+            page_font_size_pt = page_cfg.get("fontSizePt")
+            
+            # 如果 layout 配置缺失，回退到 styles 配置
+            if not page_font_family:
+                page_font_family = page_number_style.get("fontFamily")
+            if not page_font_size_pt:
+                page_font_size_pt = page_number_style.get("fontSizePt")
+            if not page_align:
+                page_align = page_number_style.get("align", "center")
+            
+            logger.info(f"[_apply_docx_font] 最终页码配置: position={page_position}, align={page_align}, fontFamily={page_font_family}, fontSizePt={page_font_size_pt}")
+            logger.info(f"[_apply_docx_font] =======================")
+            
             if page_cfg.get("enabled", True):
-                # 获取页码样式自己的字体和对齐方式，而不是使用 layout 中的值
-                page_font = self._font_display_name(
-                    page_number_style.get("fontFamily"),
-                    default_cjk_font
-                )
-                # 优先使用页码样式中的对齐方式，其次使用 layout 配置
-                page_align = page_number_style.get("align") or page_cfg.get("align", "right")
-                self._add_page_number_footer(
+                page_font = self._font_display_name(page_font_family, default_cjk_font)
+                self._add_page_number(
                     doc,
-                    page_number_style,
-                    page_cfg.get("position", "bottom"),
+                    {
+                        "fontFamily": page_font_family,
+                        "fontSizePt": page_font_size_pt,
+                    },
+                    page_position,
                     page_align,
                     page_font,
                 )
+                logger.info(f"[_apply_docx_font] 页码添加完成")
 
             doc.save(docx_path)
             logger.info(
                 f"docx 已应用模板字体与页面参数，正文中文字体={default_cjk_font}"
             )
+            # 更新字段，确保页码等域正确刷新
+            try:
+                doc.core_properties.title = ""  # 触发属性更新
+            except Exception:
+                pass
         except Exception as e:
             logger.warning(f"设置 docx 字体失败，跳过此步骤: {e}")
             # 字体设置失败不影响导出，文件已生成
 
-    def _add_page_number_footer(
+    def _add_page_number(
         self,
         doc,
         page_number_style: dict[str, Any],
@@ -1900,7 +1956,7 @@ class ExportService:
         default_font: str,
     ) -> None:
         """
-        为 Word 文档添加页脚页码。
+        为 Word 文档添加页码（header 或 footer）。
 
         使用 Word 原生字段 { PAGE } 实现自动页码，
         支持配置字体、字号、对齐方式和位置（顶部/底部）。
@@ -1921,108 +1977,79 @@ class ExportService:
         font_name = self._font_display_name(page_number_style.get("fontFamily"), default_font)
         font_size_pt = float(page_number_style.get("fontSizePt", 12))
 
-        # 遍历所有 section，为每个添加页脚
+        # 根据 position 确定操作 header 还是 footer
+        is_header = position == "top"
+        container_name = "页眉" if is_header else "页脚"
+
+        # 遍历所有 section
         for section in doc.sections:
             try:
-                # 获取页脚
-                footer = section.footer
-                footer.is_linked_to_previous = False
+                # 获取页眉或页脚
+                container = section.header if is_header else section.footer
+                container.is_linked_to_previous = False
 
-                # 清空现有页脚内容
-                for para in list(footer.paragraphs):
+                # 清空现有内容
+                for para in list(container.paragraphs):
                     p = para._element
                     p.getparent().remove(p)
 
-                # 添加新的页脚段落
-                footer_p = footer.add_paragraph()
-                footer_p.alignment = _ALIGN_MAP.get(align, WD_ALIGN_PARAGRAPH.RIGHT)
+                # 【关键修复】确保首页显示页脚 - 移除 titlePg
+                sectPr = section._sectPr
+                titlePg = sectPr.find(qn("w:titlePg"))
+                if titlePg is not None:
+                    sectPr.remove(titlePg)
+                
+                # 添加新的段落
+                para = container.add_paragraph()
+                para.alignment = _ALIGN_MAP.get(align, WD_ALIGN_PARAGRAPH.CENTER)
 
                 # 设置页边距
-                section.footer_distance = Pt(20)
-                section.header_distance = Pt(20)
+                if is_header:
+                    section.header_distance = Pt(20)
+                else:
+                    section.footer_distance = Pt(20)
 
-                # 添加 PAGE 字段 - 所有 run 都需要正确的字体属性
-                runs_info = [
-                    ("begin", None),      # 字段开始
-                    ("instr", " PAGE "),  # 字段指令
-                    ("sep", None),        # 字段分隔
-                    ("result", "1"),      # 字段结果
-                    ("end", None),        # 字段结束
-                ]
+                # 使用 python-docx 内置方法添加页码字段
+                # 这样可以确保字段结构正确，Word 打开时会自动更新
+                run = para.add_run()
+                fldChar1 = OxmlElement("w:fldChar")
+                fldChar1.set(qn("w:fldCharType"), "begin")
+                run._r.append(fldChar1)
 
-                for run_type, text in runs_info:
-                    if run_type in ("begin", "sep", "end"):
-                        # fldChar run
-                        run = footer_p.add_run()
-                        rPr = OxmlElement("w:rPr")
-                        # 设置字体
-                        rFonts = OxmlElement("w:rFonts")
-                        rFonts.set(qn("w:eastAsia"), font_name)
-                        rFonts.set(qn("w:ascii"), font_name)
-                        rFonts.set(qn("w:hAnsi"), font_name)
-                        rFonts.set(qn("w:cs"), font_name)
-                        rPr.append(rFonts)
-                        # 设置字号
-                        sz = OxmlElement("w:sz")
-                        sz.set(qn("w:val"), str(int(font_size_pt * 2)))
-                        rPr.append(sz)
-                        szCs = OxmlElement("w:szCs")
-                        szCs.set(qn("w:val"), str(int(font_size_pt * 2)))
-                        rPr.append(szCs)
-                        # 字段字符
-                        fldChar = OxmlElement("w:fldChar")
-                        fldChar.set(qn("w:fldCharType"), run_type)
-                        rPr.append(fldChar)
-                        run._r.append(rPr)
-                    elif run_type == "instr":
-                        # 指令文本 run
-                        run = footer_p.add_run()
-                        rPr = OxmlElement("w:rPr")
-                        # 设置字体
-                        rFonts = OxmlElement("w:rFonts")
-                        rFonts.set(qn("w:eastAsia"), font_name)
-                        rFonts.set(qn("w:ascii"), font_name)
-                        rFonts.set(qn("w:hAnsi"), font_name)
-                        rFonts.set(qn("w:cs"), font_name)
-                        rPr.append(rFonts)
-                        # 设置字号
-                        sz = OxmlElement("w:sz")
-                        sz.set(qn("w:val"), str(int(font_size_pt * 2)))
-                        rPr.append(sz)
-                        szCs = OxmlElement("w:szCs")
-                        szCs.set(qn("w:val"), str(int(font_size_pt * 2)))
-                        rPr.append(szCs)
-                        # 指令文本
-                        instrText = OxmlElement("w:instrText")
-                        instrText.set(qn("xml:space"), "preserve")
-                        instrText.text = text
-                        rPr.append(instrText)
-                        run._r.append(rPr)
-                    else:
-                        # 普通文本 run
-                        run = footer_p.add_run()
-                        run.text = text
-                        rPr = OxmlElement("w:rPr")
-                        # 设置字体
-                        rFonts = OxmlElement("w:rFonts")
-                        rFonts.set(qn("w:eastAsia"), font_name)
-                        rFonts.set(qn("w:ascii"), font_name)
-                        rFonts.set(qn("w:hAnsi"), font_name)
-                        rFonts.set(qn("w:cs"), font_name)
-                        rPr.append(rFonts)
-                        # 设置字号
-                        sz = OxmlElement("w:sz")
-                        sz.set(qn("w:val"), str(int(font_size_pt * 2)))
-                        rPr.append(sz)
-                        szCs = OxmlElement("w:szCs")
-                        szCs.set(qn("w:val"), str(int(font_size_pt * 2)))
-                        rPr.append(szCs)
-                        # 将 rPr 插入到 run 的开头
-                        run._r.insert(0, rPr)
+                run2 = para.add_run()
+                instrText = OxmlElement("w:instrText")
+                instrText.set(qn("xml:space"), "preserve")
+                instrText.text = " PAGE \\* MERGEFORMAT "
+                run2._r.append(instrText)
 
-                logger.debug(f"已添加页脚页码: font={font_name}, size={font_size_pt}, align={align}")
+                run3 = para.add_run()
+                fldChar2 = OxmlElement("w:fldChar")
+                fldChar2.set(qn("w:fldCharType"), "separate")
+                run3._r.append(fldChar2)
+
+                # 设置页码字体和大小
+                run4 = para.add_run()
+                run4.text = "1"
+                run4.font.name = font_name
+                run4.font.size = Pt(font_size_pt)
+
+                run5 = para.add_run()
+                fldChar3 = OxmlElement("w:fldChar")
+                fldChar3.set(qn("w:fldCharType"), "end")
+                run5._r.append(fldChar3)
+
+                # 确保 settings 中的 updateFields 为 true
+                settings = doc.settings.element
+                updateFields = settings.find(qn("w:updateFields"))
+                if updateFields is None:
+                    updateFields = OxmlElement("w:updateFields")
+                    updateFields.set(qn("w:val"), "true")
+                    settings.append(updateFields)
+                else:
+                    updateFields.set(qn("w:val"), "true")
+                logger.info(f"[导出] 已添加 {container_name}: font={font_name}, size={font_size_pt}, align={align}")
             except Exception as e:
-                logger.warning(f"添加页脚页码失败: {e}")
+                logger.warning(f"添加 {container_name} 页码失败: {e}")
                 continue
 
 

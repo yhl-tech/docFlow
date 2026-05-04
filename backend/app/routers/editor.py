@@ -177,6 +177,7 @@ def _base_capabilities(style_keys: List[str]) -> dict[str, Any]:
             "defaultParagraphSpacingBeforePt",
             "defaultParagraphSpacingAfterPt",
             "defaultFirstLineIndentChars",
+            "pageNumber",
         ],
         "supportsHeaderFooter": False,
         "supportsPageNumber": True,
@@ -198,7 +199,6 @@ def _builtin_templates() -> List[TemplateDefinition]:
         "heading_4",
         "heading_5",
         "date",
-        "page_number",
     ]
     gov_config = {
         "styles": {
@@ -227,7 +227,7 @@ def _builtin_templates() -> List[TemplateDefinition]:
         },
         "documentRules": {"datePlacement": "body_end_right", "signaturePlacement": "none"},
     }
-    report_style_keys = ["document_title", "body", "heading_1", "heading_2", "caption", "page_number"]
+    report_style_keys = ["document_title", "body", "heading_1", "heading_2", "caption"]
     report_config = {
         "styles": {
             "document_title": {"label": "标题", "role": "document_title", "fontFamily": "SimHei", "fontSizePt": 20, "bold": True, "align": "center"},
@@ -261,7 +261,6 @@ def _builtin_templates() -> List[TemplateDefinition]:
         "heading_4",
         "heading_5",
         "date",
-        "page_number",
     ]
     lesson_plan_config = {
         "styles": {
@@ -291,7 +290,7 @@ def _builtin_templates() -> List[TemplateDefinition]:
         "documentRules": {"datePlacement": "none", "signaturePlacement": "none"},
     }
 
-    notice_style_keys = ["document_title", "body", "heading_1", "date", "signature", "page_number"]
+    notice_style_keys = ["document_title", "body", "heading_1", "date", "signature"]
     notice_config = {
         "styles": {
             "document_title": {"label": "标题", "role": "document_title", "fontFamily": "SimHei", "fontSizePt": 20, "bold": True, "align": "center"},

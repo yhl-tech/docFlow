@@ -34,6 +34,8 @@ export interface LayoutConfig {
     enabled?: boolean
     position?: "top" | "bottom"
     align?: "left" | "center" | "right"
+    fontFamily?: string
+    fontSizePt?: number
   }
 }
 

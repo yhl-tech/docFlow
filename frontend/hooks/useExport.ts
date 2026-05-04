@@ -153,13 +153,18 @@ export function useExport(options: UseExportOptions = {}): UseExportReturn {
       }
 
       // 调试日志：显示完整的样式配置
-      console.log('[useExport] 导出配置:', {
-        templateId,
-        previewConfig: previewConfig?.styles,
-        effectiveBindingSnapshot: effectiveTemplateBinding?.configSnapshot?.styles,
-        heading_1_bold_preview: previewConfig?.styles?.heading_1?.bold,
-        heading_1_bold_binding: effectiveTemplateBinding?.configSnapshot?.styles?.heading_1?.bold,
-      })
+      console.log('[useExport] === 导出配置详情 ===')
+      console.log('[useExport] templateId:', templateId)
+      console.log('[useExport] currentTemplate:', currentTemplate)
+      console.log('[useExport] templateBinding:', templateBinding)
+      console.log('[useExport] previewConfig:', previewConfig)
+      console.log('[useExport] previewConfig.styles:', previewConfig?.styles)
+      console.log('[useExport] previewConfig.layout:', previewConfig?.layout)
+      console.log('[useExport] heading_1_bold_preview:', previewConfig?.styles?.heading_1?.bold)
+      console.log('[useExport] heading_1_align_preview:', previewConfig?.styles?.heading_1?.align)
+      console.log('[useExport] body_align_preview:', previewConfig?.styles?.body?.align)
+      console.log('[useExport] pageNumber_config:', previewConfig?.layout?.pageNumber)
+      console.log('[useExport] =======================')
 
       // 调试：打印完整的 API 请求 payload
       const apiPayload = {

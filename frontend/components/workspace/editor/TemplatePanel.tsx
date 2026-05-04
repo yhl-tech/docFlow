@@ -2,7 +2,7 @@
 
 import { useEffect, useCallback, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
-import { X, Copy, Info, Trash2 } from "lucide-react"
+import { X, Copy, Info, Trash2, Pencil } from "lucide-react"
 import { toast } from "sonner"
 import { useEditorStore } from "@/store/editorStore"
 import { editorService } from "@/lib/api/editor"
@@ -22,12 +22,16 @@ const KIND_LABELS: Record<string, string> = {
 }
 
 const PAPER_SIZES = ["A4", "B5", "16K", "Letter"]
+const PAGE_NUMBER_POSITIONS = [
+  { value: "top", label: "顶部" },
+  { value: "bottom", label: "底部" },
+]
 const INDENT_OPTIONS = [
   { value: 0, label: "无" },
   { value: 2, label: "2字符" },
   { value: 4, label: "4字符" },
 ]
-const ALIGN_OPTIONS: { value: StyleSlotConfig["align"]; label: string }[] = [
+const ALIGN_OPTIONS: { value: string; label: string }[] = [
   { value: "left", label: "左" },
   { value: "center", label: "中" },
   { value: "right", label: "右" },
@@ -233,6 +237,8 @@ export function TemplatePanel() {
     "styles",
   )
   const [loadingTemplates, setLoadingTemplates] = useState(false)
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null)
+  const [editingTemplateName, setEditingTemplateName] = useState("")
 
   /* 加载模板和字体列表 */
   useEffect(() => {
@@ -267,6 +273,36 @@ export function TemplatePanel() {
       }
     },
     [templates, setTemplates, setCurrentTemplate],
+  )
+
+  const handleRename = useCallback(
+    async (tpl: TemplateDefinition, newName: string) => {
+      const trimmed = newName.trim()
+      if (!trimmed || trimmed === tpl.name) {
+        setEditingTemplateId(null)
+        return
+      }
+      try {
+        const updated = await editorService.updateTemplate(tpl.id, {
+          ...tpl,
+          name: trimmed,
+        } as any)
+        setTemplates(
+          (templates ?? []).map((item) =>
+            item.id === tpl.id ? (updated as any) : item,
+          ),
+        )
+        if (currentTemplate?.id === tpl.id) {
+          setCurrentTemplate(updated as any)
+        }
+        toast.success("已重命名为「" + trimmed + "」")
+      } catch {
+        toast.error("重命名失败")
+      } finally {
+        setEditingTemplateId(null)
+      }
+    },
+    [templates, setTemplates, currentTemplate, setCurrentTemplate],
   )
 
   const handleApply = useCallback(async () => {
@@ -361,7 +397,7 @@ export function TemplatePanel() {
   const styleKeys: string[] = stylesSection?.styleKeys ?? editableSlots
 
   const panel = (
-    <div className="fixed inset-0 z-[9000] flex">
+    <div className="fixed inset-0 z-[100000] flex">
       {/* 遮罩 */}
       <div className="flex-1 bg-black/20" onClick={closeTemplatePanel} />
 
@@ -405,9 +441,20 @@ export function TemplatePanel() {
                   key={tpl.id}
                   tpl={tpl}
                   active={currentTemplate?.id === tpl.id}
+                  editing={editingTemplateId === tpl.id}
+                  editingName={editingTemplateId === tpl.id ? editingTemplateName : ""}
                   onSelect={() => handleSelectTemplate(tpl)}
                   onDuplicate={() => handleDuplicate(tpl)}
                   onDelete={() => handleDelete(tpl)}
+                  onRename={() => {
+                    if (tpl.source === "user") {
+                      setEditingTemplateId(tpl.id)
+                      setEditingTemplateName(tpl.name)
+                    }
+                  }}
+                  onRenameChange={setEditingTemplateName}
+                  onRenameConfirm={() => handleRename(tpl, editingTemplateName)}
+                  onRenameCancel={() => setEditingTemplateId(null)}
                 />
               ))}
               {userTemplates.length > 0 && (
@@ -420,9 +467,20 @@ export function TemplatePanel() {
                   key={tpl.id}
                   tpl={tpl}
                   active={currentTemplate?.id === tpl.id}
+                  editing={editingTemplateId === tpl.id}
+                  editingName={editingTemplateId === tpl.id ? editingTemplateName : ""}
                   onSelect={() => handleSelectTemplate(tpl)}
                   onDuplicate={() => handleDuplicate(tpl)}
                   onDelete={() => handleDelete(tpl)}
+                  onRename={() => {
+                    if (tpl.source === "user") {
+                      setEditingTemplateId(tpl.id)
+                      setEditingTemplateName(tpl.name)
+                    }
+                  }}
+                  onRenameChange={setEditingTemplateName}
+                  onRenameConfirm={() => handleRename(tpl, editingTemplateName)}
+                  onRenameCancel={() => setEditingTemplateId(null)}
                 />
               ))}
               {allTemplates.length === 0 && (
@@ -485,7 +543,9 @@ export function TemplatePanel() {
                     此模板无可配置的样式槽位
                   </p>
                 ) : (
-                  styleKeys.map((sk) => {
+                  styleKeys
+                    .filter((sk) => sk !== "date")
+                    .map((sk) => {
                     const slot = draftTemplateConfig.styles[sk]
                     if (!slot) return null
 
@@ -649,6 +709,97 @@ export function TemplatePanel() {
                     disabled={isBuiltin}
                   />
                 </FieldRow>
+
+                <div className="my-3 border-t border-slate-100" />
+                <SectionTitle>页码</SectionTitle>
+                <FieldRow label="启用页码">
+                  <label className="relative inline-flex cursor-pointer items-center">
+                    <input
+                      type="checkbox"
+                      checked={draftTemplateConfig.layout.pageNumber?.enabled ?? false}
+                      onChange={(e) => {
+                        if (isBuiltin) return
+                        updateDraftLayout("pageNumber", {
+                          ...draftTemplateConfig.layout.pageNumber,
+                          enabled: e.target.checked,
+                        })
+                      }}
+                      disabled={isBuiltin}
+                      className="peer sr-only"
+                    />
+                    <div className="peer h-4 w-7 rounded-full bg-slate-200 after:absolute after:left-[2px] after:top-[2px] after:h-3 after:w-3 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:bg-slate-800 peer-checked:after:translate-x-full peer-checked:after:border-white peer-disabled:opacity-50"></div>
+                  </label>
+                </FieldRow>
+                {draftTemplateConfig.layout.pageNumber?.enabled && (
+                  <>
+                    <FieldRow label="显示位置">
+                      <Select
+                        value={draftTemplateConfig.layout.pageNumber?.position ?? "bottom"}
+                        onChange={(v) => {
+                          if (isBuiltin) return
+                          updateDraftLayout("pageNumber", {
+                            ...draftTemplateConfig.layout.pageNumber,
+                            position: v as "top" | "bottom",
+                          })
+                        }}
+                        options={PAGE_NUMBER_POSITIONS}
+                        disabled={isBuiltin}
+                      />
+                    </FieldRow>
+                    <FieldRow label="对齐方式">
+                      <Select
+                        value={draftTemplateConfig.layout.pageNumber?.align ?? "center"}
+                        onChange={(v) => {
+                          if (isBuiltin) return
+                          updateDraftLayout("pageNumber", {
+                            ...draftTemplateConfig.layout.pageNumber,
+                            align: v as "left" | "center" | "right",
+                          })
+                        }}
+                        options={ALIGN_OPTIONS}
+                        disabled={isBuiltin}
+                      />
+                    </FieldRow>
+                    <FieldRow label="字体">
+                      <select
+                        value={draftTemplateConfig.layout.pageNumber?.fontFamily ?? ""}
+                        onChange={(e) => {
+                          if (isBuiltin) return
+                          updateDraftLayout("pageNumber", {
+                            ...draftTemplateConfig.layout.pageNumber,
+                            fontFamily: e.target.value,
+                          })
+                        }}
+                        disabled={isBuiltin}
+                        className="min-w-[110px] flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-300 disabled:opacity-50"
+                      >
+                        <option value="">默认</option>
+                        {availableFonts.map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name}
+                          </option>
+                        ))}
+                      </select>
+                    </FieldRow>
+                    <FieldRow label="字号">
+                      <NumberInput
+                        value={draftTemplateConfig.layout.pageNumber?.fontSizePt}
+                        onChange={(v) => {
+                          if (isBuiltin) return
+                          updateDraftLayout("pageNumber", {
+                            ...draftTemplateConfig.layout.pageNumber,
+                            fontSizePt: v,
+                          })
+                        }}
+                        min={8}
+                        max={72}
+                        step={0.5}
+                        unit="pt"
+                        disabled={isBuiltin}
+                      />
+                    </FieldRow>
+                  </>
+                )}
               </div>
             )}
         </div>
@@ -681,31 +832,67 @@ export function TemplatePanel() {
 function TemplateRow({
   tpl,
   active,
+  editing,
+  editingName,
   onSelect,
   onDuplicate,
   onDelete,
+  onRename,
+  onRenameChange,
+  onRenameConfirm,
+  onRenameCancel,
 }: {
   tpl: TemplateDefinition
   active: boolean
+  editing?: boolean
+  editingName?: string
   onSelect: () => void
   onDuplicate: () => void
   onDelete: () => void
+  onRename?: () => void
+  onRenameChange?: (name: string) => void
+  onRenameConfirm?: () => void
+  onRenameCancel?: () => void
 }) {
   const kindLabel = KIND_LABELS[tpl.kind] ?? tpl.kind
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault()
+      onRenameConfirm?.()
+    } else if (e.key === "Escape") {
+      onRenameCancel?.()
+    }
+  }
+
   return (
     <div
-      className={`flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 transition-colors ${
+      className={`group flex cursor-pointer items-center justify-between rounded-lg px-3 py-2 transition-colors ${
         active ? "bg-slate-800 text-white" : "hover:bg-slate-50"
       }`}
-      onClick={onSelect}
+      onClick={() => {
+        if (!editing) onSelect()
+      }}
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <p
-            className={`truncate text-xs font-medium ${active ? "text-white" : "text-slate-700"}`}
-          >
-            {tpl.name}
-          </p>
+          {editing && editingName !== undefined ? (
+            <input
+              autoFocus
+              value={editingName}
+              onChange={(e) => onRenameChange?.(e.target.value)}
+              onKeyDown={handleKeyDown}
+              onBlur={onRenameConfirm}
+              onClick={(e) => e.stopPropagation()}
+              className="flex-1 rounded border border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-400"
+            />
+          ) : (
+            <p
+              className={`truncate text-xs font-medium ${active ? "text-white" : "text-slate-700"}`}
+            >
+              {tpl.name}
+            </p>
+          )}
           <span
             className={`flex-shrink-0 rounded px-1.5 py-0.5 text-[9px] ${
               active
@@ -716,7 +903,7 @@ function TemplateRow({
             {kindLabel}
           </span>
         </div>
-        {tpl.description && (
+        {tpl.description && !editing && (
           <p
             className={`mt-0.5 truncate text-[10px] ${active ? "text-slate-300" : "text-slate-400"}`}
           >
@@ -740,21 +927,40 @@ function TemplateRow({
         <Copy className="h-3 w-3" />
       </button>
       {tpl.source === "user" && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            e.preventDefault()
-            onDelete()
-          }}
-          title="删除模板"
-          className={`ml-1 flex-shrink-0 rounded p-1 transition-colors ${
-            active
-              ? "text-slate-300 hover:text-white"
-              : "text-slate-300 hover:text-red-500"
-          }`}
-        >
-          <Trash2 className="h-3 w-3" />
-        </button>
+        <>
+          {!editing && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                onRename?.()
+              }}
+              title="重命名"
+              className={`ml-1 flex-shrink-0 rounded p-1 transition-colors ${
+                active
+                  ? "text-slate-300 hover:text-white"
+                  : "text-slate-300 hover:text-slate-600"
+              }`}
+            >
+              <Pencil className="h-3 w-3" />
+            </button>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              onDelete()
+            }}
+            title="删除模板"
+            className={`ml-1 flex-shrink-0 rounded p-1 transition-colors ${
+              active
+                ? "text-slate-300 hover:text-white"
+                : "text-slate-300 hover:text-red-500"
+            }`}
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </>
       )}
     </div>
   )
