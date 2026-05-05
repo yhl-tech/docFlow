@@ -102,6 +102,7 @@ export function useExport(options: UseExportOptions = {}): UseExportReturn {
     exportStatus,
     setExportStatus,
     getPreviewTemplateConfig,
+    originalDocxBlob,
   } = useEditorStore()
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
 
@@ -132,25 +133,29 @@ export function useExport(options: UseExportOptions = {}): UseExportReturn {
       const templateId = currentTemplate?.id ?? templateBinding?.templateId
 
       // 构建有效的模板绑定：
-      // 1. 如果有预览配置（模板面板已打开且有草稿），使用预览配置
-      // 2. 如果模板绑定有 configSnapshot，直接使用
-      // 3. 如果有当前模板但没有快照，使用当前模板配置作为快照
-      let effectiveTemplateBinding: typeof templateBinding = templateBinding
-      if (previewConfig && templateId) {
-        // 模板面板有草稿配置，优先使用
-        effectiveTemplateBinding = {
-          templateId,
-          appliedAt: templateBinding?.appliedAt ?? new Date().toISOString(),
-          configSnapshot: previewConfig,
-        }
-      } else if (templateId && !templateBinding?.configSnapshot && currentTemplate?.config) {
-        // 有当前模板但没有快照，使用当前模板配置作为快照
-        effectiveTemplateBinding = {
-          templateId,
-          appliedAt: new Date().toISOString(),
-          configSnapshot: currentTemplate.config,
+      // 重要：只有当用户选择了模板（templateId 存在）时才使用模板配置
+      // 如果没有选择模板，应该使用原始文档样式（通过 originalDocxBase64 传递）
+      let effectiveTemplateBinding: typeof templateBinding | undefined = undefined
+
+      if (templateId) {
+        // 用户选择了模板，使用模板配置
+        if (previewConfig) {
+          // 模板面板有草稿配置，优先使用
+          effectiveTemplateBinding = {
+            templateId,
+            appliedAt: templateBinding?.appliedAt ?? new Date().toISOString(),
+            configSnapshot: previewConfig,
+          }
+        } else if (currentTemplate?.config) {
+          // 使用当前模板配置
+          effectiveTemplateBinding = {
+            templateId,
+            appliedAt: new Date().toISOString(),
+            configSnapshot: currentTemplate.config,
+          }
         }
       }
+      // 如果没有 templateId，effectiveTemplateBinding 保持 undefined，后端会使用原始文档样式
 
       // 调试日志：显示完整的样式配置
       console.log('[useExport] === 导出配置详情 ===')
@@ -167,10 +172,27 @@ export function useExport(options: UseExportOptions = {}): UseExportReturn {
       console.log('[useExport] =======================')
 
       // 调试：打印完整的 API 请求 payload
+      // 将原始 DOCX blob 转为 base64 字符串传递
+      // 使用安全的分块转换方法
+      let originalDocxBase64: string | undefined
+      if (originalDocxBlob) {
+        try {
+          const binary = Array.from(originalDocxBlob)
+            .map(byte => String.fromCharCode(byte))
+            .join('')
+          originalDocxBase64 = btoa(binary)
+        } catch (e) {
+          console.error('[useExport] base64 转换失败:', e)
+          originalDocxBase64 = undefined
+        }
+      }
+      console.log('[useExport] originalDocxBase64 length:', originalDocxBase64?.length)
+
       const apiPayload = {
         markdown: content,
         template: templateId,
         templateBinding: effectiveTemplateBinding,
+        originalDocxBase64,
       }
       console.log('[useExport] API 请求 payload:', JSON.stringify(apiPayload, null, 2))
 
@@ -178,6 +200,7 @@ export function useExport(options: UseExportOptions = {}): UseExportReturn {
         markdown: content,
         template: templateId,
         templateBinding: effectiveTemplateBinding,
+        originalDocxBase64,
       })
       const filename = extractFilename(content, FILE_EXT[format])
       downloadBlob(res.blob, filename)
@@ -194,7 +217,7 @@ export function useExport(options: UseExportOptions = {}): UseExportReturn {
       setExportStatus('error', code === 'INSUFFICIENT_BALANCE' || code === 'QUOTA_EXCEEDED' ? '余额不足' : '导出失败')
       return false
     }
-  }, [content, currentTemplate, templateBinding, exportStatus, validate, setExportStatus, getPreviewTemplateConfig, onSuccess, onError])
+  }, [content, currentTemplate, templateBinding, exportStatus, validate, setExportStatus, getPreviewTemplateConfig, originalDocxBlob, onSuccess, onError])
 
   // 便捷方法
   const exportToDocx = useCallback(() => exportDoc('docx'), [exportDoc])

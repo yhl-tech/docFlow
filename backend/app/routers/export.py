@@ -1,3 +1,4 @@
+import base64
 import re
 from datetime import datetime
 from urllib.parse import quote
@@ -201,6 +202,7 @@ async def export_docx(
             template=body.template,
             page_size=body.page_size,
             template_binding=effective_template_binding,
+            original_docx_base64=body.original_docx_base64,
         )
     except PandocNotAvailableError as exc:
         if db_user:

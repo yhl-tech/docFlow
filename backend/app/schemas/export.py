@@ -15,6 +15,11 @@ class ExportRequest(BaseModel):
         default=None,
         validation_alias="templateBinding"  # 前端发送的字段名
     )
+    original_docx_base64: Optional[str] = Field(
+        default=None,
+        validation_alias="originalDocxBase64",
+        description="原始 DOCX 文件的 Base64 编码，保留样式用"
+    )
 
     @field_validator("markdown")
     @classmethod

@@ -1110,9 +1110,13 @@ class ExportService:
         template: str = "default",
         page_size: str = "A4",
         template_binding: Optional[dict[str, Any]] = None,
+        original_docx_base64: Optional[str] = None,
     ) -> bytes:
         """
         将 Markdown 转换为 docx 字节流。
+
+        当无模板设置且传入了原始 DOCX base64 数据时，将其作为 Pandoc --reference-doc，
+        使导出的文档继承原文档的字体、颜色、对齐等样式。
 
         Raises:
             PandocNotAvailableError: 服务器未安装 pandoc
@@ -1154,9 +1158,20 @@ class ExportService:
             ]
 
             ref_doc = self._reference_doc(template)
-            if ref_doc:
-                cmd.extend(["--reference-doc", ref_doc])
-                logger.debug(f"使用模板：{ref_doc}")
+            original_docx_bytes = None
+            has_template_binding = bool(
+                template_binding and template_binding.get("configSnapshot")
+            )
+
+            # 无模板但有原始 DOCX → 使用合并方法保留原始样式
+            if not has_template_binding and original_docx_base64:
+                try:
+                    import base64 as _base64
+                    original_docx_bytes = _base64.b64decode(original_docx_base64)
+                    logger.info(f"解码原始 DOCX 成功，大小: {len(original_docx_bytes)} bytes")
+                except Exception as e:
+                    logger.warning(f"解码原始 DOCX base64 失败，跳过: {e}")
+                    original_docx_bytes = None
 
             # 4. 执行 pandoc
             # Windows 上需要使用 shell 来正确执行 PATH 中的可执行文件
@@ -1222,11 +1237,28 @@ class ExportService:
             if not os.path.exists(output_path):
                 raise RuntimeError(f"Pandoc 执行成功但未生成输出文件，可能是内容格式问题")
 
-            # 5. 设置中文字体（黑体）- 失败不影响导出
-            try:
-                self._apply_docx_font(output_path, template_binding=template_binding)
-            except Exception as e:
-                logger.warning(f"设置字体失败，跳过: {e}")
+            # 5. 处理输出
+            # - 有模板配置 → _apply_docx_font 应用模板样式
+            # - 有原始 DOCX（无模板）→ 使用合并方法保留原始样式
+            # - 其他情况 → 直接返回 pandoc 生成的文档
+            if has_template_binding:
+                try:
+                    self._apply_docx_font(output_path, template_binding=template_binding)
+                except Exception as e:
+                    logger.warning(f"设置字体失败，跳过: {e}")
+            elif original_docx_bytes:
+                # 使用合并方法：将 Markdown 内容合并到原始 DOCX，保留原始样式
+                try:
+                    logger.info("[export_docx] 使用合并方法保留原始文档样式")
+                    merged_docx = await self._merge_markdown_to_docx(
+                        processed,
+                        original_docx_bytes,
+                        tmpdir,
+                    )
+                    return merged_docx
+                except Exception as e:
+                    logger.warning(f"合并 Markdown 到 DOCX 失败，降级使用 Pandoc: {e}")
+                    # 降级：继续使用 Pandoc 生成的文档
 
             # 6. 读取并返回 docx 字节
             try:
@@ -1235,6 +1267,357 @@ class ExportService:
             except Exception as e:
                 logger.error(f"读取 docx 文件失败: {e}")
                 raise RuntimeError(f"读取导出文件失败: {e}")
+
+    async def _merge_markdown_to_docx(
+        self,
+        markdown: str,
+        original_docx_bytes: bytes,
+        tmpdir: str,
+    ) -> bytes:
+        """
+        将 Markdown 内容转换为 DOCX，继承原始文档的样式。
+
+        策略：
+        1. 从原始 docx 提取段落样式映射（文本 -> 段落属性）
+        2. 用 pandoc 将 markdown 转成纯内容 docx
+        3. 将样式应用到 pandoc 生成的段落
+        4. 打包时使用原始 docx 的结构（styles.xml 等）
+
+        Returns:
+            bytes: 修改后的 DOCX 文件内容
+        """
+        import zipfile
+        import io
+        import re as re_module
+        from lxml import etree
+
+        logger.info("[_merge_markdown_to_docx] 开始合并 Markdown 到原始 DOCX")
+
+        WNS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+
+        # ── 1. 从原始 docx 提取段落样式映射 ──────────────────────────────
+        original_zip = zipfile.ZipFile(io.BytesIO(original_docx_bytes), 'r')
+        original_xml = original_zip.read('word/document.xml')
+        original_tree = etree.fromstring(original_xml)
+
+        para_style_map = {}
+
+        for para in original_tree.iter(f'{{{WNS}}}p'):
+            para_text = ''.join(t.text or '' for t in para.iter(f'{{{WNS}}}t'))
+            if not para_text.strip():
+                continue
+
+            pPr = para.find(f'{{{WNS}}}pPr')
+            para_style = None
+            para_alignment = None
+            para_spacing = None
+            if pPr is not None:
+                pStyle = pPr.find(f'{{{WNS}}}pStyle')
+                if pStyle is not None:
+                    para_style = pStyle.get(f'{{{WNS}}}val')
+                jc = pPr.find(f'{{{WNS}}}jc')
+                if jc is not None:
+                    para_alignment = jc.get(f'{{{WNS}}}val')
+                spacing = pPr.find(f'{{{WNS}}}spacing')
+                if spacing is not None:
+                    para_spacing = {
+                        'before': spacing.get(f'{{{WNS}}}before'),
+                        'after': spacing.get(f'{{{WNS}}}after'),
+                        'line': spacing.get(f'{{{WNS}}}line'),
+                        'lineRule': spacing.get(f'{{{WNS}}}lineRule'),
+                    }
+
+            run_styles = []
+            for run in para.iter(f'{{{WNS}}}r'):
+                rPr = run.find(f'{{{WNS}}}rPr')
+                style = {}
+                if rPr is not None:
+                    color = rPr.find(f'{{{WNS}}}color')
+                    if color is not None:
+                        style['color'] = color.get(f'{{{WNS}}}val')
+                    if rPr.find(f'{{{WNS}}}b') is not None:
+                        style['bold'] = True
+                    if rPr.find(f'{{{WNS}}}i') is not None:
+                        style['italic'] = True
+                    sz = rPr.find(f'{{{WNS}}}sz')
+                    if sz is not None:
+                        style['sz'] = sz.get(f'{{{WNS}}}val')
+                    szCs = rPr.find(f'{{{WNS}}}szCs')
+                    if szCs is not None:
+                        style['szCs'] = szCs.get(f'{{{WNS}}}val')
+                    rFonts = rPr.find(f'{{{WNS}}}rFonts')
+                    if rFonts is not None:
+                        style['asciiFont'] = rFonts.get(f'{{{WNS}}}ascii')
+                        style['eastAsiaFont'] = rFonts.get(f'{{{WNS}}}eastAsia')
+                        style['hAnsiFont'] = rFonts.get(f'{{{WNS}}}hAnsi')
+                run_styles.append(style)
+
+            para_style_map[para_text] = {
+                'style': para_style,
+                'alignment': para_alignment,
+                'spacing': para_spacing,
+                'run_styles': run_styles,
+            }
+
+        # 保留原始样式文件
+        original_styles_xml = original_zip.read('word/styles.xml')
+        original_settings_xml = original_zip.read('word/settings.xml')
+        original_zip.close()
+
+        logger.info(f"[_merge_markdown_to_docx] 提取了 {len(para_style_map)} 个段落样式")
+
+        # ── 2. 用 pandoc 生成 docx（不用 reference-doc） ───────────────────
+        pandoc_input_path = os.path.join(tmpdir, "input.md")
+        with open(pandoc_input_path, "w", encoding="utf-8-sig") as f:
+            f.write(markdown)
+
+        pandoc_output_path = os.path.join(tmpdir, "pandoc_output.docx")
+        cmd = [
+            self._pandoc_bin_path,
+            "--from=markdown+tex_math_dollars+tex_math_single_backslash+raw_html",
+            "--to=docx",
+            "-o",
+            pandoc_output_path,
+            pandoc_input_path,
+        ]
+
+        import subprocess
+        try:
+            result = subprocess.run(cmd, capture_output=True, timeout=60, cwd=tmpdir)
+            if result.returncode != 0:
+                raise RuntimeError(f"Pandoc 转换失败: {result.stderr.decode('utf-8', errors='replace')}")
+        except Exception as e:
+            logger.warning(f"Pandoc 执行失败: {e}")
+            raise
+
+        # ── 3. 解析 pandoc 生成的文档 ────────────────────────────────────
+        pandoc_zip = zipfile.ZipFile(pandoc_output_path, 'r')
+        pandoc_xml = pandoc_zip.read('word/document.xml')
+        pandoc_tree = etree.fromstring(pandoc_xml)
+        pandoc_body = pandoc_tree.find(f'.//{{{WNS}}}body')
+
+        # ── 4. 将原始样式应用到 pandoc 段落 ───────────────────────────────
+        def normalize_text(t):
+            return re_module.sub(r'\s+', '', t)
+
+        def text_similarity(t1, t2):
+            if not t1 or not t2:
+                return 0
+            s1, s2 = set(normalize_text(t1)), set(normalize_text(t2))
+            if not s1 or not s2:
+                return 0
+            return len(s1 & s2) / len(s1 | s2)
+
+        # 建立归一化文本到原始样式的映射
+        norm_to_original = {}
+        for text, style_info in para_style_map.items():
+            norm = normalize_text(text)
+            if norm not in norm_to_original or style_info['style']:
+                norm_to_original[norm] = (text, style_info)
+
+        applied = 0
+        for para in pandoc_body.iter(f'{{{WNS}}}p'):
+            para_text = ''.join(t.text or '' for t in para.iter(f'{{{WNS}}}t'))
+            if not para_text.strip():
+                continue
+
+            # 查找最匹配的原始段落
+            best_match = None
+            best_sim = 0
+            for norm_text, (orig_text, style_info) in norm_to_original.items():
+                sim = text_similarity(para_text, orig_text)
+                if sim > best_sim and sim > 0.6:
+                    best_sim = sim
+                    best_match = (norm_text, orig_text, style_info)
+
+            if best_match:
+                norm_text, orig_text, orig_style = best_match
+
+                # 应用段落样式
+                pPr = para.find(f'{{{WNS}}}pPr')
+                if pPr is None:
+                    pPr = etree.Element(f'{{{WNS}}}pPr')
+                    para.insert(0, pPr)
+
+                # 段落样式
+                if orig_style['style']:
+                    pStyle = pPr.find(f'{{{WNS}}}pStyle')
+                    if pStyle is None:
+                        pStyle = etree.SubElement(pPr, f'{{{WNS}}}pStyle')
+                    pStyle.set(f'{{{WNS}}}val', orig_style['style'])
+
+                # 对齐
+                if orig_style['alignment']:
+                    jc = pPr.find(f'{{{WNS}}}jc')
+                    if jc is None:
+                        jc = etree.SubElement(pPr, f'{{{WNS}}}jc')
+                    jc.set(f'{{{WNS}}}val', orig_style['alignment'])
+
+                # 段间距
+                if orig_style['spacing']:
+                    sp = pPr.find(f'{{{WNS}}}spacing')
+                    if sp is None:
+                        sp = etree.SubElement(pPr, f'{{{WNS}}}spacing')
+                    for attr, val in orig_style['spacing'].items():
+                        if val:
+                            sp.set(f'{{{WNS}}}{attr}', val)
+
+                # Run 样式
+                runs = list(para.iter(f'{{{WNS}}}r'))
+                for j, run in enumerate(runs):
+                    if j < len(orig_style['run_styles']):
+                        rs = orig_style['run_styles'][j]
+                        if rs:
+                            rPr = run.find(f'{{{WNS}}}rPr')
+                            if rPr is None:
+                                rPr = etree.Element(f'{{{WNS}}}rPr')
+                                run.insert(0, rPr)
+
+                            if 'color' in rs:
+                                color = rPr.find(f'{{{WNS}}}color')
+                                if color is None:
+                                    color = etree.SubElement(rPr, f'{{{WNS}}}color')
+                                color.set(f'{{{WNS}}}val', rs['color'])
+
+                            if 'bold' in rs:
+                                if rPr.find(f'{{{WNS}}}b') is None:
+                                    etree.SubElement(rPr, f'{{{WNS}}}b')
+                            if 'italic' in rs:
+                                if rPr.find(f'{{{WNS}}}i') is None:
+                                    etree.SubElement(rPr, f'{{{WNS}}}i')
+
+                            # 字号
+                            if 'sz' in rs:
+                                sz = rPr.find(f'{{{WNS}}}sz')
+                                if sz is None:
+                                    sz = etree.SubElement(rPr, f'{{{WNS}}}sz')
+                                sz.set(f'{{{WNS}}}val', rs['sz'])
+                            if 'szCs' in rs:
+                                szCs = rPr.find(f'{{{WNS}}}szCs')
+                                if szCs is None:
+                                    szCs = etree.SubElement(rPr, f'{{{WNS}}}szCs')
+                                szCs.set(f'{{{WNS}}}val', rs['szCs'])
+
+                            # 字体
+                            if 'asciiFont' in rs or 'eastAsiaFont' in rs:
+                                rFonts = rPr.find(f'{{{WNS}}}rFonts')
+                                if rFonts is None:
+                                    rFonts = etree.SubElement(rPr, f'{{{WNS}}}rFonts')
+                                if 'asciiFont' in rs:
+                                    rFonts.set(f'{{{WNS}}}ascii', rs['asciiFont'])
+                                if 'eastAsiaFont' in rs:
+                                    rFonts.set(f'{{{WNS}}}eastAsia', rs['eastAsiaFont'])
+                                if 'hAnsiFont' in rs:
+                                    rFonts.set(f'{{{WNS}}}hAnsi', rs['hAnsiFont'])
+
+                applied += 1
+
+        logger.info(f"[_merge_markdown_to_docx] 应用了 {applied} 个样式")
+
+        # ── 5. 打包：使用原始 docx 结构 + pandoc 内容 + 原始样式 ─────────
+        modified_xml = etree.tostring(pandoc_tree, xml_declaration=True, encoding='UTF-8', standalone=True)
+
+        output_buffer = io.BytesIO()
+        output_zip = zipfile.ZipFile(output_buffer, 'w', zipfile.ZIP_DEFLATED)
+
+        orig_zip = zipfile.ZipFile(io.BytesIO(original_docx_bytes), 'r')
+        for item in orig_zip.namelist():
+            if item == 'word/document.xml':
+                output_zip.writestr(item, modified_xml)
+            elif item == 'word/styles.xml':
+                output_zip.writestr(item, original_styles_xml)
+            elif item == 'word/settings.xml':
+                output_zip.writestr(item, original_settings_xml)
+            else:
+                output_zip.writestr(item, orig_zip.read(item))
+        orig_zip.close()
+
+        pandoc_zip.close()
+        output_zip.close()
+
+        result_bytes = output_buffer.getvalue()
+        logger.info(f"[_merge_markdown_to_docx] 完成，输出大小: {len(result_bytes)} bytes")
+        return result_bytes
+
+    def _copy_styles_between_documents(self, source_doc, target_doc) -> None:
+        """复制源文档的样式定义到目标文档"""
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+
+        # 获取源文档的样式元素
+        source_styles = source_doc.styles.element
+        target_styles = target_doc.styles.element
+
+        # 复制所有样式定义
+        for style_elem in source_styles:
+            if style_elem.tag == qn('w:style'):
+                # 深拷贝样式元素
+                style_copy = style_elem.__copy__()
+                target_styles.append(style_copy)
+
+        logger.debug(f"[_copy_styles_between_documents] 复制了 {len(list(source_styles))} 个样式")
+
+    def _find_matching_paragraph_style(self, original_doc, text: str) -> str | None:
+        """在原始文档中查找与给定文本最相似的段落，返回其样式名"""
+        from docx.oxml.ns import qn
+
+        # 提取文本前50个字符用于匹配
+        match_text = text[:50] if len(text) > 50 else text
+
+        for para in original_doc.paragraphs:
+            para_text = para.text.strip()
+            if not para_text:
+                continue
+
+            # 检查文本相似度（简单的前缀匹配）
+            if match_text.startswith(para_text[:20]) or para_text.startswith(match_text[:20]):
+                style_name = para.style.name
+                if style_name and style_name != 'Normal':
+                    return style_name
+
+            # 检查是否是标题（通过样式名判断）
+            style_name = para.style.name
+            if 'Heading' in style_name or 'Title' in style_name or 'Subtitle' in style_name:
+                # 提取标题文本进行比较
+                para_heading_text = para_text[:30]
+                match_heading_text = match_text.lstrip('#').strip()[:30]
+                if para_heading_text == match_heading_text or match_heading_text.startswith(para_heading_text[:10]):
+                    return style_name
+
+        return None
+
+    def _copy_run_style_from_original(self, original_doc, target_para, text: str) -> None:
+        """从原始文档中复制 run 样式到目标段落"""
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+
+        # 查找原始文档中与当前文本最相似的段落
+        for para in original_doc.paragraphs:
+            para_text = para.text.strip()
+            if not para_text:
+                continue
+
+            # 检查文本是否匹配
+            if text.startswith(para_text[:20]) or para_text.startswith(text[:20]):
+                # 找到匹配段落，复制其段落属性
+                pPr = para._p.find(qn('w:pPr'))
+                if pPr is not None:
+                    # 复制段落属性
+                    pPr_copy = pPr.__copy__()
+                    existing_pPr = target_para._p.find(qn('w:pPr'))
+                    if existing_pPr is not None:
+                        target_para._p.remove(existing_pPr)
+                    target_para._p.insert(0, pPr_copy)
+
+                # 复制 run 属性（如果有匹配的 run）
+                for run in para.runs:
+                    run_text = run.text or ""
+                    if text.startswith(run_text[:10]) or run_text.startswith(text[:10]):
+                        rPr = run._r.find(qn('w:rPr'))
+                        if rPr is not None:
+                            target_para.runs[0]._r.insert(0, rPr.__copy__())
+                        break
+                break
 
     _MATH_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 
@@ -1976,6 +2359,37 @@ class ExportService:
         # 获取页码样式配置
         font_name = self._font_display_name(page_number_style.get("fontFamily"), default_font)
         font_size_pt = float(page_number_style.get("fontSizePt", 12))
+        # 字号需要乘 2，因为 Word 中 sz 的单位是半点（half-point）
+        font_size_half_pt = str(int(font_size_pt * 2))
+
+        # 直接操作 Word XML 确保字体字号被正确写入每个 run 的 <w:rPr>
+        def _apply_font_xml(run_elem):
+            rPr = run_elem.find(qn("w:rPr"))
+            if rPr is None:
+                rPr = OxmlElement("w:rPr")
+                run_elem.insert(0, rPr)
+
+            # 字体：设置 w:rFonts 的 w:eastAsia（中文）和 w:ascii / w:hAnsi（英文）
+            rFonts = rPr.find(qn("w:rFonts"))
+            if rFonts is None:
+                rFonts = OxmlElement("w:rFonts")
+                rPr.insert(0, rFonts)
+            rFonts.set(qn("w:eastAsia"), font_name)
+            rFonts.set(qn("w:ascii"), font_name)
+            rFonts.set(qn("w:hAnsi"), font_name)
+
+            # 字号：w:sz（显示）和 w:szCs（复杂脚本显示）
+            sz = rPr.find(qn("w:sz"))
+            if sz is None:
+                sz = OxmlElement("w:sz")
+                rPr.append(sz)
+            sz.set(qn("w:val"), font_size_half_pt)
+
+            szCs = rPr.find(qn("w:szCs"))
+            if szCs is None:
+                szCs = OxmlElement("w:szCs")
+                rPr.append(szCs)
+            szCs.set(qn("w:val"), font_size_half_pt)
 
         # 根据 position 确定操作 header 还是 footer
         is_header = position == "top"
@@ -2009,34 +2423,35 @@ class ExportService:
                 else:
                     section.footer_distance = Pt(20)
 
-                # 使用 python-docx 内置方法添加页码字段
-                # 这样可以确保字段结构正确，Word 打开时会自动更新
+                # 添加 5 个 run 构建 PAGE 字段结构
                 run = para.add_run()
                 fldChar1 = OxmlElement("w:fldChar")
                 fldChar1.set(qn("w:fldCharType"), "begin")
                 run._r.append(fldChar1)
+                _apply_font_xml(run._r)
 
                 run2 = para.add_run()
                 instrText = OxmlElement("w:instrText")
                 instrText.set(qn("xml:space"), "preserve")
                 instrText.text = " PAGE \\* MERGEFORMAT "
                 run2._r.append(instrText)
+                _apply_font_xml(run2._r)
 
                 run3 = para.add_run()
                 fldChar2 = OxmlElement("w:fldChar")
                 fldChar2.set(qn("w:fldCharType"), "separate")
                 run3._r.append(fldChar2)
+                _apply_font_xml(run3._r)
 
-                # 设置页码字体和大小
                 run4 = para.add_run()
                 run4.text = "1"
-                run4.font.name = font_name
-                run4.font.size = Pt(font_size_pt)
+                _apply_font_xml(run4._r)
 
                 run5 = para.add_run()
                 fldChar3 = OxmlElement("w:fldChar")
                 fldChar3.set(qn("w:fldCharType"), "end")
                 run5._r.append(fldChar3)
+                _apply_font_xml(run5._r)
 
                 # 确保 settings 中的 updateFields 为 true
                 settings = doc.settings.element

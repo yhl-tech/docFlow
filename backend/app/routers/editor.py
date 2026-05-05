@@ -625,6 +625,9 @@ async def get_templates(
     source: Optional[str] = Query(default=None),
 ):
     builtin_templates = _builtin_templates()
+    # 隐藏指定的内置模板（不在列表中返回）
+    hidden_template_ids = {"gov_doc_gbt9704", "general_report", "general_notice"}
+    builtin_templates = [t for t in builtin_templates if t.id not in hidden_template_ids]
     if kind:
         builtin_templates = [template for template in builtin_templates if template.kind == kind]
     if source:

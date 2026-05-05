@@ -242,14 +242,23 @@ export function WorkspaceChat() {
     const toastId = toast.loading('正在解析文档...')
 
     try {
+      // 读取原始文件二进制（用于导出时保留原始样式）
+      const arrayBuffer = await file.arrayBuffer()
+      const originalBlob = new Uint8Array(arrayBuffer)
+
       // 调用后端 API 解析 Word 文档（包括公式和字符级样式）
       const result = await editorService.parseDocx(file)
 
       // 合并状态更新：同时设置内容和 Word 样式，确保它们在同一次渲染中更新
       // 避免竞争条件：setContent 和 setPendingWordStyles 分散调用可能导致应用时机不一致
+      // 重要：清除模板绑定和当前模板，因为上传新文档后应该使用文档原始样式
       useEditorStore.setState({
         content: result.text,
         pendingWordStyles: result.style_runs?.length ? result.style_runs : null,
+        originalDocxBlob: originalBlob,
+        templateBinding: null,
+        currentTemplate: null,
+        draftTemplateConfig: null,
       })
 
       toast.success('文档已导入编辑器', { id: toastId })
