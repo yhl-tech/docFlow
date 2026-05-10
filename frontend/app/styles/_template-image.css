@@ -1,0 +1,285 @@
+/* ─── 模板图片样式（支持模板配置的环绕、对齐、边框、间距、效果） ─── */
+
+/* 模板纸张容器 - 使用 flow-root 创建 BFC，防止浮动元素导致容器塌陷 */
+.tpl-paper {
+  padding: var(--tpl-margin, 2.5rem 3rem);
+  display: flow-root;
+}
+
+/* 确保包含图片的段落使用左对齐，不受正文样式影响 */
+.tpl-paper .tiptap p:has(img),
+.tpl-paper .ProseMirror p:has(img) {
+  text-align: left !important;
+}
+
+/* ─── 图片基础样式 ─── */
+
+.tpl-paper .tiptap img,
+.tpl-paper img.ProseMirror-image,
+.tpl-paper .tiptap .ProseMirror img,
+.tpl-paper .ProseMirror img {
+  max-width: 100% !important;
+  height: auto !important;
+  box-sizing: border-box !important;
+  border: var(--tpl-img-border, none) !important;
+  display: block !important;
+  float: none !important;
+  clear: both !important;
+}
+
+/* 图片间距 - 使用 CSS 变量 */
+.tpl-paper .tiptap img,
+.tpl-paper img.ProseMirror-image,
+.tpl-paper .ProseMirror img {
+  margin-top: var(--tpl-img-margin-top, 0) !important;
+  margin-bottom: var(--tpl-img-margin-bottom, 0) !important;
+  margin-left: var(--tpl-img-margin-left, 0) !important;
+  margin-right: var(--tpl-img-margin-right, 0) !important;
+}
+
+/* 图片滤镜效果 - 亮度、对比度 */
+.tpl-paper .tiptap img,
+.tpl-paper img.ProseMirror-image,
+.tpl-paper .ProseMirror img {
+  filter: var(--tpl-img-filter, none) !important;
+}
+
+/* ─── 图片对齐 ─── */
+
+/* 左对齐 */
+.tpl-paper .tiptap img[data-img-align="left"],
+.tpl-paper .ProseMirror img[data-img-align="left"],
+.tpl-paper img.ProseMirror-image[data-img-align="left"] {
+  float: left !important;
+}
+
+/* 居中对齐 */
+.tpl-paper .tiptap img[data-img-align="center"],
+.tpl-paper .ProseMirror img[data-img-align="center"],
+.tpl-paper img.ProseMirror-image[data-img-align="center"] {
+  display: block !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  float: none !important;
+}
+
+/* 右对齐 */
+.tpl-paper .tiptap img[data-img-align="right"],
+.tpl-paper .ProseMirror img[data-img-align="right"],
+.tpl-paper img.ProseMirror-image[data-img-align="right"] {
+  float: right !important;
+}
+
+/* ─── 四周型环绕 + 对齐组合 ─── */
+
+/* 四周型左对齐 */
+.tpl-paper .tiptap img[data-wrap-type="square"][data-img-align="left"],
+.tpl-paper .ProseMirror img[data-wrap-type="square"][data-img-align="left"],
+.tpl-paper img.ProseMirror-image[data-wrap-type="square"][data-img-align="left"] {
+  float: left !important;
+  max-width: 50% !important;
+}
+
+/* 四周型居中对齐 */
+.tpl-paper .tiptap img[data-wrap-type="square"][data-img-align="center"],
+.tpl-paper .ProseMirror img[data-wrap-type="square"][data-img-align="center"],
+.tpl-paper img.ProseMirror-image[data-wrap-type="square"][data-img-align="center"] {
+  float: none !important;
+  max-width: 100% !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* 四周型右对齐 */
+.tpl-paper .tiptap img[data-wrap-type="square"][data-img-align="right"],
+.tpl-paper .ProseMirror img[data-wrap-type="square"][data-img-align="right"],
+.tpl-paper img.ProseMirror-image[data-wrap-type="square"][data-img-align="right"] {
+  float: right !important;
+  max-width: 50% !important;
+}
+
+/* ─── 紧密型环绕 + 对齐组合 ─── */
+
+/* 紧密型左对齐 */
+.tpl-paper .tiptap img[data-wrap-type="tight"][data-img-align="left"],
+.tpl-paper .ProseMirror img[data-wrap-type="tight"][data-img-align="left"],
+.tpl-paper img.ProseMirror-image[data-wrap-type="tight"][data-img-align="left"] {
+  float: left !important;
+  max-width: 50% !important;
+}
+
+/* 紧密型居中对齐 */
+.tpl-paper .tiptap img[data-wrap-type="tight"][data-img-align="center"],
+.tpl-paper .ProseMirror img[data-wrap-type="tight"][data-img-align="center"],
+.tpl-paper img.ProseMirror-image[data-wrap-type="tight"][data-img-align="center"] {
+  float: none !important;
+  max-width: 100% !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* 紧密型右对齐 */
+.tpl-paper .tiptap img[data-wrap-type="tight"][data-img-align="right"],
+.tpl-paper .ProseMirror img[data-wrap-type="tight"][data-img-align="right"],
+.tpl-paper img.ProseMirror-image[data-wrap-type="tight"][data-img-align="right"] {
+  float: right !important;
+  max-width: 50% !important;
+}
+
+/* ─── 穿越型环绕 + 对齐组合 ─── */
+
+/* 穿越型左对齐 */
+.tpl-paper .tiptap img[data-wrap-type="through"][data-img-align="left"],
+.tpl-paper .ProseMirror img[data-wrap-type="through"][data-img-align="left"],
+.tpl-paper img.ProseMirror-image[data-wrap-type="through"][data-img-align="left"] {
+  float: left !important;
+  max-width: 50% !important;
+}
+
+/* 穿越型居中对齐 */
+.tpl-paper .tiptap img[data-wrap-type="through"][data-img-align="center"],
+.tpl-paper .ProseMirror img[data-wrap-type="through"][data-img-align="center"],
+.tpl-paper img.ProseMirror-image[data-wrap-type="through"][data-img-align="center"] {
+  float: none !important;
+  max-width: 100% !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* 穿越型右对齐 */
+.tpl-paper .tiptap img[data-wrap-type="through"][data-img-align="right"],
+.tpl-paper .ProseMirror img[data-wrap-type="through"][data-img-align="right"],
+.tpl-paper img.ProseMirror-image[data-wrap-type="through"][data-img-align="right"] {
+  float: right !important;
+  max-width: 50% !important;
+}
+
+/* ─── 通用环绕类型（无特定对齐时默认左浮动） ─── */
+
+/* 四周型环绕（square）- 默认左浮动 */
+.tpl-paper .tiptap img[data-wrap-type="square"],
+.tpl-paper .ProseMirror img[data-wrap-type="square"],
+.tpl-paper img.ProseMirror-image[data-wrap-type="square"] {
+  float: left !important;
+  max-width: 50% !important;
+  margin-right: var(--tpl-img-margin-right, 8px) !important;
+  margin-bottom: var(--tpl-img-margin-bottom, 8px) !important;
+  margin-top: var(--tpl-img-margin-top, 0) !important;
+  margin-left: var(--tpl-img-margin-left, 0) !important;
+}
+
+/* 紧密型环绕（tight）- 默认左浮动 */
+.tpl-paper .tiptap img[data-wrap-type="tight"],
+.tpl-paper .ProseMirror img[data-wrap-type="tight"],
+.tpl-paper img.ProseMirror-image[data-wrap-type="tight"] {
+  float: left !important;
+  max-width: 50% !important;
+  margin-right: 4px !important;
+  margin-bottom: 4px !important;
+}
+
+/* 穿越型环绕（through）- 默认左浮动 */
+.tpl-paper .tiptap img[data-wrap-type="through"],
+.tpl-paper .ProseMirror img[data-wrap-type="through"],
+.tpl-paper img.ProseMirror-image[data-wrap-type="through"] {
+  float: left !important;
+  max-width: 50% !important;
+}
+
+/* 上下型环绕（topAndBottom） */
+.tpl-paper .tiptap img[data-wrap-type="topAndBottom"],
+.tpl-paper .ProseMirror img[data-wrap-type="topAndBottom"],
+.tpl-paper img.ProseMirror-image[data-wrap-type="topAndBottom"] {
+  display: block !important;
+  max-width: 100% !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  float: none !important;
+}
+
+/* 浮动在文字后（behind）- 水印效果 */
+.tpl-paper .tiptap img[data-wrap-type="behind"],
+.tpl-paper .ProseMirror img[data-wrap-type="behind"],
+.tpl-paper img.ProseMirror-image[data-wrap-type="behind"] {
+  position: relative !important;
+  z-index: 0 !important;
+  float: left !important;
+}
+
+/* 浮动在文字前（inFront） */
+.tpl-paper .tiptap img[data-wrap-type="inFront"],
+.tpl-paper .ProseMirror img[data-wrap-type="inFront"],
+.tpl-paper img.ProseMirror-image[data-wrap-type="inFront"] {
+  position: relative !important;
+  z-index: 1 !important;
+  max-width: 100% !important;
+}
+
+/* ─── 内联图片样式 ─── */
+
+/* 内联图片 - 左对齐（默认情况，不应该浮动） */
+.tpl-paper .tiptap img[data-wrap-type="inline"][data-img-align="left"],
+.tpl-paper .ProseMirror img[data-wrap-type="inline"][data-img-align="left"],
+.tpl-paper img.ProseMirror-image[data-wrap-type="inline"][data-img-align="left"] {
+  display: block !important;
+  margin-left: 0 !important;
+  margin-right: auto !important;
+  float: none !important;
+  clear: both !important;
+}
+
+/* 内联图片 - 居中对齐 */
+.tpl-paper .tiptap img[data-wrap-type="inline"][data-img-align="center"],
+.tpl-paper .ProseMirror img[data-wrap-type="inline"][data-img-align="center"],
+.tpl-paper img.ProseMirror-image[data-wrap-type="inline"][data-img-align="center"] {
+  display: block !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  float: none !important;
+}
+
+/* 内联图片 - 右对齐 */
+.tpl-paper .tiptap img[data-wrap-type="inline"][data-img-align="right"],
+.tpl-paper .ProseMirror img[data-wrap-type="inline"][data-img-align="right"],
+.tpl-paper img.ProseMirror-image[data-wrap-type="inline"][data-img-align="right"] {
+  display: block !important;
+  margin-left: auto !important;
+  margin-right: 0 !important;
+  float: right !important;
+}
+
+/* 通用内联图片基础样式 */
+.tpl-paper .tiptap img[data-wrap-type="inline"],
+.tpl-paper .ProseMirror img[data-wrap-type="inline"],
+.tpl-paper img.ProseMirror-image[data-wrap-type="inline"] {
+  display: block !important;
+  float: none !important;
+}
+
+/* ─── 图片尺寸模式 ─── */
+
+/* 原始尺寸（默认） */
+.tpl-paper .tiptap img[data-size-mode="original"],
+.tpl-paper .ProseMirror img[data-size-mode="original"],
+.tpl-paper img.ProseMirror-image[data-size-mode="original"] {
+  max-width: 100% !important;
+  width: auto !important;
+  height: auto !important;
+}
+
+/* ─── 图片最大宽度/高度（使用 CSS 变量） ─── */
+
+.tpl-paper .tiptap img,
+.tpl-paper .ProseMirror img,
+.tpl-paper img.ProseMirror-image {
+  max-width: var(--tpl-img-max-width, 100%) !important;
+  max-height: var(--tpl-img-max-height, none) !important;
+}
+
+/* ─── 图片行间距 ─── */
+
+/* 行间距通过 CSS 变量作用于所有包裹图片的段落 */
+.tpl-paper .tiptap p:has(img),
+.tpl-paper .ProseMirror p:has(img) {
+  line-height: var(--tpl-img-line-spacing, normal) !important;
+}

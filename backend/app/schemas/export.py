@@ -1,6 +1,6 @@
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 ExportFormat = Literal["docx", "pdf", "excel", "image"]
 Template = str
@@ -15,13 +15,6 @@ class ExportRequest(BaseModel):
         default=None,
         validation_alias="templateBinding"  # 前端发送的字段名
     )
-
-    @field_validator("markdown")
-    @classmethod
-    def validate_markdown_length(cls, v: str) -> str:
-        if len(v) > 50_000:
-            raise ValueError("内容超过 50000 字符限制")
-        return v
 
 
 class ExportErrorResponse(BaseModel):

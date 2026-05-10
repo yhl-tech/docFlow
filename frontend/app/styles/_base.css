@@ -1,0 +1,18 @@
+/* ─── 基础样式 ─── */
+
+/* 工作台容器 */
+.workspace-container {
+  font-feature-settings: "ss01", "ss02", "cv01", "cv02";
+  overflow: hidden !important;
+}
+.workspace-chat-column {
+  overflow: hidden !important;
+  min-height: 0;
+}
+
+/* 工作台编辑区 placeholder */
+[contenteditable]:empty:before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  pointer-events: none;
+}

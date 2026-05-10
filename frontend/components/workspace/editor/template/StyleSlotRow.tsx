@@ -44,7 +44,7 @@ export function NumberInput({
         max={max}
         step={step}
         disabled={disabled}
-        className="w-16 rounded border border-slate-200 bg-white px-2 py-1 text-right text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-300 disabled:opacity-50"
+        className="w-14 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-300 disabled:opacity-50"
       />
       {unit && <span className="text-xs text-slate-400">{unit}</span>}
     </div>
@@ -67,7 +67,7 @@ export function FontSelect({ value, fonts, onChange, disabled }: FontSelectProps
       value={value ?? ''}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      className="min-w-[110px] flex-1 rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-300 disabled:opacity-50"
+      className="w-[110px] rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-300 disabled:opacity-50"
     >
       {fonts.map((f) => (
         <option key={f.id} value={f.id}>

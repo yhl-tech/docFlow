@@ -147,6 +147,78 @@ def sample_template_config(sample_styles, sample_layout) -> dict[str, Any]:
 
 
 @pytest.fixture
+def sample_heading_styles_binding() -> dict[str, Any]:
+    """带 headingStyles 和 paragraphStyles 的模板绑定"""
+    return {
+        "templateId": "test",
+        "appliedAt": "2026-05-02T00:00:00Z",
+        "configSnapshot": {
+            "styles": {
+                "document_title": {
+                    "fontFamily": "SimHei",
+                    "fontSizePt": 20,
+                    "bold": True,
+                },
+                "body": {
+                    "fontFamily": "FangSong_GB2312",
+                    "fontSizePt": 16,
+                    "bold": False,
+                    "align": "justify",
+                },
+            },
+            "headingStyles": {
+                "h1": {
+                    "font": {
+                        "fontFamily": "SimHei",
+                        "fontSizePt": 16,
+                        "bold": True,
+                        "color": "#000000",
+                    },
+                    "align": "left",
+                    "lineHeight": 1.5,
+                    "spacingBeforePt": 12,
+                    "spacingAfterPt": 6,
+                    "firstLineIndentChars": 0,
+                },
+                "h2": {
+                    "font": {
+                        "fontFamily": "SimHei",
+                        "fontSizePt": 14,
+                        "bold": True,
+                        "italic": False,
+                        "color": "#333333",
+                    },
+                    "align": "left",
+                    "lineHeight": 1.4,
+                },
+                "h3": {
+                    "font": {
+                        "fontFamily": "SimHei",
+                        "fontSizePt": 13,
+                        "bold": False,
+                    }
+                },
+            },
+            "paragraphStyles": {
+                "align": "justify",
+                "lineHeight": 1.8,
+                "spacingBeforePt": 0,
+                "spacingAfterPt": 6,
+                "firstLineIndentChars": 2,
+            },
+            "layout": {
+                "paperSize": "A4",
+                "marginTopMm": 25,
+                "marginBottomMm": 25,
+                "marginLeftMm": 20,
+                "marginRightMm": 20,
+                "defaultLineHeight": 1.75,
+            },
+        },
+    }
+
+
+@pytest.fixture
 def mock_pandoc_available(monkeypatch: pytest.MonkeyPatch) -> None:
     """Mock pandoc 可用"""
     async def mock_check(*args, **kwargs) -> bool:

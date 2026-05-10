@@ -1,0 +1,65 @@
+/* ─── 公式样式 ─── */
+
+/* 富文本编辑器文档区公式样式 */
+.editor-document .katex-formula-block {
+  display: block;
+  text-align: center;
+  padding: 0.5rem;
+  margin: 0.5rem 0;
+  background: #f0f7ff;
+  border-radius: 6px;
+  border: 1px dashed #93c5fd;
+  color: #2563eb;
+  font-family: monospace;
+  font-size: 0.875rem;
+}
+.editor-document .katex-formula-inline {
+  display: inline;
+  padding: 0 0.25rem;
+  background: #f0f7ff;
+  border-radius: 4px;
+  color: #2563eb;
+  font-family: monospace;
+  font-size: 0.875rem;
+}
+
+/* KaTeX 公式样式修正 */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.5rem 0;
+}
+
+/* 块级公式：独占一行、居中 */
+.katex-block-wrap {
+  display: block;
+  text-align: center;
+  margin: 0.75rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* 公式溢出时的细滚动条样式 */
+.katex-block-wrap::-webkit-scrollbar,
+.katex-display::-webkit-scrollbar {
+  height: 4px;
+}
+.katex-block-wrap::-webkit-scrollbar-track,
+.katex-display::-webkit-scrollbar-track {
+  background: transparent;
+}
+.katex-block-wrap::-webkit-scrollbar-thumb,
+.katex-display::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+.katex-block-wrap::-webkit-scrollbar-thumb:hover,
+.katex-display::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* 行内公式：与文字基线对齐 */
+.katex-inline-wrap {
+  display: inline;
+  vertical-align: middle;
+}

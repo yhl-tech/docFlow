@@ -20,13 +20,9 @@ from app.routers import auth, export, records, user, payment, ai, editor
 
 
 # 配置 loguru 日志输出到 stdout（确保终端能看到日志）
-logger.remove()
-logger.add(
-    sys.stdout,
-    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-    level="DEBUG",  # 开发环境使用 DEBUG 级别
-    colorize=True,
-)
+# 注意：不要在这里 add handler，因为 setup_logging 会 remove 所有 handlers
+# 只需要设置日志级别
+logger.configure(levels=[{"name": "DEBUG"}])
 setup_logging(level="DEBUG", format_type="simple")
 
 

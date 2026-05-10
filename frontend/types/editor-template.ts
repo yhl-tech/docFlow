@@ -11,6 +11,46 @@ export interface FontInfo {
 // 样式槽位配置
 // ============================================================
 
+export interface FontConfig {
+  fontFamily?: string
+  fontSizePt?: number
+  bold?: boolean
+  italic?: boolean
+  color?: string
+  backgroundColor?: string
+}
+
+// 英文单独字体配置
+export interface EnglishFontConfig {
+  useSeparateFont?: boolean
+  fontFamily?: string
+}
+
+export interface SpacingConfig {
+  spacingBeforePt?: number
+  spacingAfterPt?: number
+}
+
+export interface HeadingStyleConfig {
+  font?: FontConfig
+  align?: "left" | "center" | "right" | "justify"
+  lineHeight?: number
+  spacingBeforePt?: number
+  spacingAfterPt?: number
+  firstLineIndentChars?: number
+  outlineLevel?: number
+  leftIndentChars?: number
+}
+
+export interface ParagraphStyleConfig {
+  align?: "left" | "center" | "right" | "justify"
+  lineHeight?: number
+  spacingBeforePt?: number
+  spacingAfterPt?: number
+  firstLineIndentChars?: number
+  outlineLevel?: number
+}
+
 export interface StyleSlotConfig {
   label: string
   role: string
@@ -88,6 +128,10 @@ export interface LayoutConfig {
   marginBottomMm?: number
   marginLeftMm?: number
   marginRightMm?: number
+  /** 页眉距离顶边距的距离（厘米） */
+  headerDistanceCm?: number
+  /** 页脚距离底边距的距离（厘米） */
+  footerDistanceCm?: number
   defaultLineHeight?: number
   defaultParagraphSpacingBeforePt?: number
   defaultParagraphSpacingAfterPt?: number
@@ -105,6 +149,11 @@ export interface BulletListStyle {
   color?: string
   fontFamily?: string
   fontSizePt?: number
+  bold?: boolean
+  indentCm?: number
+  spacingBeforeLines?: number
+  spacingAfterLines?: number
+  lineSpacing?: number
 }
 
 export interface OrderedListStyle {
@@ -115,6 +164,11 @@ export interface OrderedListStyle {
   color?: string
   fontFamily?: string
   fontSizePt?: number
+  bold?: boolean
+  indentCm?: number
+  spacingBeforeLines?: number
+  spacingAfterLines?: number
+  lineSpacing?: number
 }
 
 export interface ListStyleConfig {
@@ -134,6 +188,17 @@ export interface ImagePositionConfig {
   horizontalLock?: boolean
   verticalLock?: boolean
   lockAnchor?: boolean
+  borderColor?: string
+  borderWidthPt?: number
+  borderStyle?: BorderStyle
+  borderRadiusPt?: number
+  /** 尺寸模式：original=原始固定，maxLimit=最大尺寸限制 */
+  sizeMode?: 'original' | 'maxLimit'
+  maxWidthCm?: number
+  maxHeightCm?: number
+  /** 保持宽高比 */
+  keepAspectRatio?: boolean
+  alignment?: 'left' | 'center' | 'right'
 }
 
 export interface ImageTextWrapConfig {
@@ -162,14 +227,51 @@ export interface ImageRecolorPreset {
 }
 
 export interface ImageStyleConfig {
+  // 位置与环绕
   position?: ImagePositionConfig
+  // 文字环绕
   textWrap?: ImageTextWrapConfig
+  // 样式效果
   style?: {
     cropArea?: boolean
     effect?: ImageStyleEffect
     brightness?: number
     contrast?: number
     recolor?: ImageRecolorPreset
+  }
+  // 图片边框
+  border?: {
+    showBorder?: boolean
+    color?: string
+    widthPt?: number
+  }
+  // 图片编号
+  numbering?: {
+    enabled?: boolean
+  }
+  // 图片间距（上下左右独立）
+  spacing?: {
+    marginTopCm?: number
+    marginBottomCm?: number
+    marginLeftCm?: number
+    marginRightCm?: number
+  }
+  // 行距
+  lineSpacing?: number
+  // 字体样式（图片标注/Alt文字用）
+  font?: {
+    fontFamily?: string
+    fontSizePt?: number
+    color?: string
+    bold?: boolean
+    italic?: boolean
+  }
+  // 内边距
+  innerPadding?: {
+    topPt?: number
+    bottomPt?: number
+    leftPt?: number
+    rightPt?: number
   }
 }
 
@@ -211,10 +313,34 @@ export interface CodeBlockTabStop {
 }
 
 export interface CodeBlockStyleConfig {
+  // 字体样式
+  font?: {
+    fontFamily?: string
+    fontSizePt?: number
+    color?: string
+    bold?: boolean
+    italic?: boolean
+  }
+  // 内边距
+  padding?: {
+    topPt?: number
+    bottomPt?: number
+    leftPt?: number
+    rightPt?: number
+  }
+  // 行距
+  lineSpacing?: number // 多倍行距，1.0 = 单倍行距
+  // 对齐
+  alignment?: 'left' | 'center' | 'right' | 'justify'
+  // 边框
   border?: CodeBlockBorder
+  // 底纹
   shading?: CodeBlockShading
+  // 键盘样式
   keyboardStyle?: CodeBlockKeyboardStyle
+  // 行号
   lineNumber?: CodeBlockLineNumber
+  // 制表位
   tabStop?: CodeBlockTabStop
 }
 
@@ -255,13 +381,62 @@ export interface TableFont {
   fontFamily?: string
   fontSizePt?: number
   color?: string
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+}
+
+export type TableVerticalAlign = 'top' | 'center' | 'bottom'
+
+export interface TableCellStyle {
+  font?: TableFont
+  align?: 'left' | 'center' | 'right' | 'justify'
+  valign?: TableVerticalAlign
+  lineHeight?: number
+  shading?: TableShading
 }
 
 export interface TableStyleConfig {
+  // 表格全局
+  tableAlignment?: 'left' | 'center' | 'right'
+  tableWidth?: number // 百分比，0-100，默认100
+
+  // 边框
   border?: TableBorder
+
+  // 底纹（默认/全局）
   shading?: TableShading
+
+  // 表头样式
+  headerStyle?: TableCellStyle
+
+  // 数据行样式
+  dataRowStyle?: TableCellStyle
+
+  // 选项
   options?: TableOptions
+
+  // 字体字号颜色（全局默认）
   font?: TableFont
+
+  // 单元格内边距
+  cellPadding?: {
+    top?: number    // cm，默认 0.14
+    bottom?: number  // cm，默认 0.14
+    left?: number    // cm，默认 0.00
+    right?: number   // cm，默认 0.00
+  }
+
+  // 表格编号
+  tableNumbering?: {
+    enabled?: boolean
+  }
+
+  // 行高
+  rowHeight?: {
+    headerHeightCm?: number    // 默认 0.78
+    dataRowHeightCm?: number   // 默认 0.78
+  }
 }
 
 // ============================================================
@@ -270,7 +445,11 @@ export interface TableStyleConfig {
 
 export interface TemplateConfig {
   styles: Record<string, StyleSlotConfig>
+  /** 英文单独字体配置 */
+  englishFont?: EnglishFontConfig
   layout: LayoutConfig
+  headingStyles?: Record<string, HeadingStyleConfig>
+  paragraphStyles?: ParagraphStyleConfig
   listStyles?: ListStyleConfig
   imageStyles?: ImageStyleConfig
   codeBlockStyles?: CodeBlockStyleConfig

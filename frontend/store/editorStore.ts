@@ -9,6 +9,38 @@ import type {
 
 import type { WordStyleRun } from "@/lib/api/editor"
 
+/**
+ * 安全的深度合并工具函数
+ * 只合并存在的字段，undefined/null 不会被合并进去
+ */
+function deepMerge<T extends Record<string, any>>(
+  target: T,
+  source: Partial<T>,
+): T {
+  const result = { ...target }
+  for (const key in source) {
+    const sourceVal = source[key]
+    if (sourceVal === undefined) continue // 忽略 undefined
+    const targetVal = target[key]
+    if (
+      sourceVal !== null &&
+      typeof sourceVal === "object" &&
+      !Array.isArray(sourceVal) &&
+      targetVal !== null &&
+      typeof targetVal === "object" &&
+      !Array.isArray(targetVal)
+    ) {
+      // 两者都是对象，递归合并
+      result[key] = deepMerge(targetVal as any, sourceVal as any)
+    } else if (sourceVal !== null) {
+      // null 保留，但 undefined 忽略
+      result[key] = sourceVal
+    }
+    // 如果 sourceVal 是 null，不覆盖 targetVal
+  }
+  return result
+}
+
 export type ExportFormat = "docx" | "pdf" | "excel" | "image"
 export type ExportStatus = "idle" | "loading" | "success" | "error"
 export type UploadStatus = "idle" | "loading" | "success" | "error"
@@ -55,6 +87,12 @@ interface EditorState {
   updateDraftTableStyles: (patch: Record<string, unknown>) => void
   updateDraftImageStyles: (patch: Record<string, unknown>) => void
   updateDraftHeaderFooter: (patch: Record<string, unknown>) => void
+  updateDraftParagraphStyles: (patch: Record<string, unknown>) => void
+  updateDraftHeadingStyles: (
+    headingLevel: string,
+    patch: Record<string, unknown>,
+  ) => void
+  updateDraftEnglishFont: (patch: Record<string, unknown>) => void
   updateDraftRule: (field: string, value: unknown) => void
   openTemplatePanel: () => void
   closeTemplatePanel: () => void
@@ -190,81 +228,107 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   updateDraftLayoutFull: (patch) =>
     set((state) => {
       if (!state.draftTemplateConfig) return state
+      const existing = state.draftTemplateConfig.layout ?? {}
       return {
         draftTemplateConfig: {
           ...state.draftTemplateConfig,
-          layout: {
-            ...state.draftTemplateConfig.layout,
-            ...patch,
-          },
+          layout: deepMerge(existing, patch),
         },
       }
     }),
   updateDraftListStyles: (patch) =>
     set((state) => {
       if (!state.draftTemplateConfig) return state
+      const existing = state.draftTemplateConfig.listStyles ?? {}
       return {
         draftTemplateConfig: {
           ...state.draftTemplateConfig,
-          listStyles: {
-            ...(state.draftTemplateConfig.listStyles ?? {}),
-            ...patch,
-          },
+          listStyles: deepMerge(existing, patch),
         },
       }
     }),
   updateDraftCodeBlockStyles: (patch) =>
     set((state) => {
       if (!state.draftTemplateConfig) return state
+      const existing = state.draftTemplateConfig.codeBlockStyles ?? {}
       return {
         draftTemplateConfig: {
           ...state.draftTemplateConfig,
-          codeBlockStyles: {
-            ...(state.draftTemplateConfig.codeBlockStyles ?? {}),
-            ...patch,
-          },
+          codeBlockStyles: deepMerge(existing, patch),
         },
       }
     }),
   updateDraftTableStyles: (patch) =>
     set((state) => {
       if (!state.draftTemplateConfig) return state
+      const existing = state.draftTemplateConfig.tableStyles ?? {}
       return {
         draftTemplateConfig: {
           ...state.draftTemplateConfig,
-          tableStyles: {
-            ...(state.draftTemplateConfig.tableStyles ?? {}),
-            ...patch,
-          },
+          tableStyles: deepMerge(existing, patch),
         },
       }
     }),
   updateDraftImageStyles: (patch) =>
     set((state) => {
       if (!state.draftTemplateConfig) return state
+      const existing = state.draftTemplateConfig.imageStyles ?? {}
+      // 使用安全的深度合并，只更新传入的字段，保留其他字段
       return {
         draftTemplateConfig: {
           ...state.draftTemplateConfig,
-          imageStyles: {
-            ...(state.draftTemplateConfig.imageStyles ?? {}),
-            ...patch,
-          },
+          imageStyles: deepMerge(existing, patch),
         },
       }
     }),
   updateDraftHeaderFooter: (patch) =>
     set((state) => {
       if (!state.draftTemplateConfig) return state
+      const existing = state.draftTemplateConfig.layout.headerFooter ?? {}
       return {
         draftTemplateConfig: {
           ...state.draftTemplateConfig,
           layout: {
             ...state.draftTemplateConfig.layout,
-            headerFooter: {
-              ...(state.draftTemplateConfig.layout.headerFooter ?? {}),
-              ...patch,
-            },
+            headerFooter: deepMerge(existing, patch),
           },
+        },
+      }
+    }),
+  updateDraftParagraphStyles: (patch) =>
+    set((state) => {
+      if (!state.draftTemplateConfig) return state
+      const existing = state.draftTemplateConfig.paragraphStyles ?? {}
+      return {
+        draftTemplateConfig: {
+          ...state.draftTemplateConfig,
+          paragraphStyles: deepMerge(existing, patch),
+        },
+      }
+    }),
+  updateDraftHeadingStyles: (headingLevel, patch) =>
+    set((state) => {
+      if (!state.draftTemplateConfig) return state
+      const existing =
+        state.draftTemplateConfig.headingStyles?.[headingLevel] ?? {}
+      return {
+        draftTemplateConfig: {
+          ...state.draftTemplateConfig,
+          headingStyles: {
+            ...(state.draftTemplateConfig.headingStyles ?? {}),
+            [headingLevel]: deepMerge(existing, patch),
+          },
+        },
+      }
+    }),
+  updateDraftEnglishFont: (patch) =>
+    set((state) => {
+      if (!state.draftTemplateConfig) return state
+      const existing = state.draftTemplateConfig.englishFont ?? {}
+      return {
+        draftTemplateConfig: {
+          ...state.draftTemplateConfig,
+          englishFont: deepMerge(existing, patch),
         },
       }
     }),

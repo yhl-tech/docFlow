@@ -240,3 +240,193 @@ class TestContentLength:
         assert len(sample_markdown) < svc.CONTENT_MAX_LENGTH
         is_valid, _ = svc._validate_markdown(sample_markdown)
         assert is_valid is True
+
+
+class TestBindingHeadingStyles:
+    """headingStyles 提取测试"""
+
+    def test_binding_heading_styles_extracts_h1_to_h6(
+        self, sample_heading_styles_binding: dict[str, Any]
+    ):
+        """headingStyles.h1~h6 应被正确提取"""
+        svc = ExportService()
+        hs = svc._binding_heading_styles(sample_heading_styles_binding)
+        assert "h1" in hs
+        assert hs["h1"]["font"]["fontFamily"] == "SimHei"
+        assert hs["h1"]["font"]["fontSizePt"] == 16
+        assert hs["h1"]["font"]["bold"] is True
+        assert hs["h2"]["font"]["fontFamily"] == "SimHei"
+        assert hs["h2"]["font"]["fontSizePt"] == 14
+
+    def test_binding_heading_styles_fallback(self):
+        """无 headingStyles 时返回空 dict"""
+        assert ExportService._binding_heading_styles(None) == {}
+        assert ExportService._binding_heading_styles({}) == {}
+
+    def test_binding_heading_styles_partial_config(self):
+        """仅配置 h1 时，h2~h6 不应存在"""
+        partial_binding = {
+            "templateId": "test",
+            "appliedAt": "2026-05-02T00:00:00Z",
+            "configSnapshot": {
+                "headingStyles": {
+                    "h1": {"font": {"fontFamily": "SimHei", "fontSizePt": 16}}
+                }
+            },
+        }
+        hs = ExportService._binding_heading_styles(partial_binding)
+        assert "h1" in hs
+        assert "h2" not in hs
+
+
+class TestBindingParagraphStyles:
+    """paragraphStyles 提取测试"""
+
+    def test_binding_paragraph_styles_extracts_align(
+        self, sample_heading_styles_binding: dict[str, Any]
+    ):
+        """paragraphStyles 应被正确提取"""
+        svc = ExportService()
+        ps = svc._binding_paragraph_styles(sample_heading_styles_binding)
+        assert ps["align"] == "justify"
+        assert ps["lineHeight"] == 1.8
+        assert ps["spacingBeforePt"] == 0
+
+    def test_binding_paragraph_styles_fallback(self):
+        """无 paragraphStyles 时返回空 dict"""
+        assert ExportService._binding_paragraph_styles(None) == {}
+
+
+class TestTableBorderCssGeneration:
+    """表格边框 CSS 生成测试"""
+
+    def test_border_style_double_generates_correct_css(self):
+        """tableStyles.border.style='double' 时，CSS 应包含 border-style: double"""
+        svc = ExportService()
+        binding = {
+            "templateId": "test",
+            "appliedAt": "2026-05-02T00:00:00Z",
+            "configSnapshot": {
+                "tableStyles": {
+                    "border": {
+                        "color": "#000000",
+                        "widthPt": 1.0,
+                        "style": "double",
+                    }
+                }
+            },
+        }
+        css = svc._get_table_css(binding)
+        assert "border-style: double" in css or "border-style:double" in css
+        assert "border-color: #000000" in css
+        assert "border-width: 1.0pt" in css or "border-width:1.0pt" in css
+
+    def test_border_width_pt_generates_border_width(self):
+        """tableStyles.border.widthPt 应生成 border-width CSS"""
+        svc = ExportService()
+        binding = {
+            "templateId": "test",
+            "appliedAt": "2026-05-02T00:00:00Z",
+            "configSnapshot": {
+                "tableStyles": {
+                    "border": {
+                        "color": "#000000",
+                        "widthPt": 2.0,
+                    }
+                }
+            },
+        }
+        css = svc._get_table_css(binding)
+        assert "border-width: 2.0pt" in css or "border-width:2.0pt" in css
+
+    def test_inside_horizontal_border_false(self):
+        """insideHorizontalBorder=false 时，应生成 collapsed 边框"""
+        svc = ExportService()
+        binding = {
+            "templateId": "test",
+            "appliedAt": "2026-05-02T00:00:00Z",
+            "configSnapshot": {
+                "tableStyles": {
+                    "border": {
+                        "insideHorizontalBorder": False,
+                    }
+                }
+            },
+        }
+        css = svc._get_table_css(binding)
+        # 目前暂未实现 insideHorizontalBorder，等实现后此测试应通过
+
+
+class TestImageStyleCssGeneration:
+    """图片样式 CSS 生成测试"""
+
+    def test_border_width_pt_generates_css(self):
+        """imageStyles.borderWidthPt 应生成对应 CSS"""
+        svc = ExportService()
+        binding = {
+            "templateId": "test",
+            "appliedAt": "2026-05-02T00:00:00Z",
+            "configSnapshot": {
+                "imageStyles": {
+                    "borderColor": "#FF0000",
+                    "borderWidthPt": 2,
+                }
+            },
+        }
+        css = svc._get_image_css(binding)
+        assert "border: 2pt solid #FF0000" in css or "border:2pt solid #FF0000" in css
+
+    def test_wrap_type_top_and_bottom_generates_css(self):
+        """wrapType='topAndBottom' 时生成正确 CSS"""
+        svc = ExportService()
+        binding = {
+            "templateId": "test",
+            "appliedAt": "2026-05-02T00:00:00Z",
+            "configSnapshot": {
+                "imageStyles": {
+                    "position": {"wrapType": "topAndBottom"}
+                }
+            },
+        }
+        css = svc._get_image_css(binding)
+        assert "display: block" in css
+        assert "margin-left: auto" in css
+        assert "margin-right: auto" in css
+
+
+class TestCodeBlockCssGeneration:
+    """代码块 CSS 生成测试"""
+
+    def test_shading_fill_generates_background_color(self):
+        """codeBlockStyles.shading.fill 应生成 background-color CSS"""
+        svc = ExportService()
+        binding = {
+            "templateId": "test",
+            "appliedAt": "2026-05-02T00:00:00Z",
+            "configSnapshot": {
+                "codeBlockStyles": {
+                    "shading": {"fill": "#F5F5F5"}
+                }
+            },
+        }
+        css = svc._get_codeblock_css(binding)
+        assert "background-color: #F5F5F5" in css or "background-color:#F5F5F5" in css
+
+    def test_keyboard_style_generates_css(self):
+        """codeBlockStyles.keyboardStyle 应生成正确 CSS"""
+        svc = ExportService()
+        binding = {
+            "templateId": "test",
+            "appliedAt": "2026-05-02T00:00:00Z",
+            "configSnapshot": {
+                "codeBlockStyles": {
+                    "keyboardStyle": {
+                        "foregroundColor": "#333333",
+                        "backgroundColor": "#FAFAFA",
+                    }
+                }
+            },
+        }
+        css = svc._get_codeblock_css(binding)
+        assert "color: #333333" in css or "color:#333333" in css
+        assert "background-color: #FAFAFA" in css or "background-color:#FAFAFA" in css

@@ -153,13 +153,6 @@ async def export_docx(
     - **模板** → 对应 reference-doc 样式（如存在）
     """
     char_count = len(body.markdown)
-    
-    # 调试：打印完整的请求体
-    import json
-    logger.info(f"[export_docx] 收到的请求体 keys: {list(body.model_dump().keys())}")
-    logger.info(f"[export_docx] body.template_binding = {body.template_binding}")
-    if body.template_binding:
-        logger.info(f"[export_docx] body.template_binding.configSnapshot keys: {list(body.template_binding.get('configSnapshot', {}).get('styles', {}).keys())}")
 
     # 记录本次导出的扣费方式，用于失败时对称退还
     deduction_type: list = []
@@ -183,6 +176,8 @@ async def export_docx(
         h1_bold = styles.get("heading_1", {}).get("bold", "NOT_FOUND")
         logger.info(f"[export_docx] 接收到的 heading_1.bold = {h1_bold}")
         logger.info(f"[export_docx] 接收到的 heading_1 配置 = {styles.get('heading_1', {})}")
+        logger.info(f"[export_docx] headingStyles = {effective_template_binding['configSnapshot'].get('headingStyles', 'NOT_IN_SNAPSHOT')}")
+        logger.info(f"[export_docx] paragraphStyles = {effective_template_binding['configSnapshot'].get('paragraphStyles', 'NOT_IN_SNAPSHOT')}")
     else:
         logger.info(f"[export_docx] template_binding = {effective_template_binding}")
     try:
@@ -199,18 +194,18 @@ async def export_docx(
             await _write_record(db, db_user.id, "docx", body.template, char_count, "failed", str(exc))
         raise HTTPException(status_code=503, detail={"error": str(exc), "code": "PANDOC_NOT_AVAILABLE"})
     except RuntimeError as exc:
+        import traceback
         if db_user:
             _refund_deduction(db_user, db, deduction_type)
             await db.commit()
             await _write_record(db, db_user.id, "docx", body.template, char_count, "failed", str(exc))
-            logger.exception(f"export_docx 失败 user={db_user.id}: {exc}")
         raise HTTPException(status_code=500, detail={"error": "Word 导出失败，请稍后重试", "code": "EXPORT_FAILED"})
     except Exception as exc:
+        import traceback
         if db_user:
             _refund_deduction(db_user, db, deduction_type)
             await db.commit()
             await _write_record(db, db_user.id, "docx", body.template, char_count, "failed", str(exc))
-            logger.exception(f"export_docx 未预期异常 user={db_user.id if db_user else 'anonymous'}")
         raise HTTPException(status_code=500, detail={"error": "服务器内部错误", "code": "INTERNAL_ERROR"})
 
     # 3. 写入成功记录

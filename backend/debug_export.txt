@@ -1,0 +1,11 @@
+=== export_docx 诊断 2026-05-10T11:46:05.289528 ===
+markdown 长度: 19
+含 Base64 图片: False
+含服务器图片: False
+pandoc 路径: C:\Users\yuanhl\AppData\Local\Pandoc\pandoc.exe
+pandoc 存在: True
+markdown 前500字符:
+# Test
+
+Hello World
+template_binding keys: []

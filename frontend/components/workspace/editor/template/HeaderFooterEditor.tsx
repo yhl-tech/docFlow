@@ -2,6 +2,7 @@
 
 import type { HeaderFooterConfig, FontInfo } from '@/types/editor-template'
 import { NumberInput } from './StyleSlotRow'
+import { Switch } from '@/components/ui/Switch'
 
 interface HeaderFooterEditorProps {
   headerFooter: HeaderFooterConfig | undefined
@@ -22,29 +23,15 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
-function ToggleSwitch({
-  checked,
-  onChange,
-  disabled,
-}: {
+interface ToggleSwitchProps {
   checked: boolean
   onChange: (v: boolean) => void
   disabled?: boolean
-}) {
+}
+
+function ToggleSwitch({ checked, onChange, disabled }: ToggleSwitchProps) {
   return (
-    <button
-      onClick={() => onChange(!checked)}
-      disabled={disabled}
-      className={`relative h-5 w-9 rounded-full transition-colors ${
-        checked ? 'bg-slate-700' : 'bg-slate-200'
-      } disabled:opacity-50`}
-    >
-      <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
-          checked ? 'translate-x-4' : 'translate-x-0.5'
-        }`}
-      />
-    </button>
+    <Switch checked={checked} onChange={onChange} disabled={disabled} />
   )
 }
 
@@ -69,6 +56,19 @@ export function HeaderFooterEditor({ headerFooter, fonts, onChange, disabled }: 
 
         {config.hasHeader && (
           <div className="space-y-2 rounded border border-slate-100 bg-slate-50 p-3">
+            {/* 页眉高度 */}
+            <div className="flex items-center gap-2">
+              <FieldLabel>页眉高度</FieldLabel>
+              <NumberInput
+                value={config.headerHeightMm}
+                onChange={(v) => onChange({ headerHeightMm: v })}
+                min={1}
+                max={50}
+                step={0.5}
+                disabled={disabled}
+              />
+              <span className="text-xs text-slate-400">mm</span>
+            </div>
             <div className="space-y-1">
               <FieldLabel>左侧内容</FieldLabel>
               <input
@@ -119,6 +119,19 @@ export function HeaderFooterEditor({ headerFooter, fonts, onChange, disabled }: 
 
         {config.hasFooter && (
           <div className="space-y-2 rounded border border-slate-100 bg-slate-50 p-3">
+            {/* 页脚高度 */}
+            <div className="flex items-center gap-2">
+              <FieldLabel>页脚高度</FieldLabel>
+              <NumberInput
+                value={config.footerHeightMm}
+                onChange={(v) => onChange({ footerHeightMm: v })}
+                min={1}
+                max={50}
+                step={0.5}
+                disabled={disabled}
+              />
+              <span className="text-xs text-slate-400">mm</span>
+            </div>
             <div className="space-y-1">
               <FieldLabel>左侧内容</FieldLabel>
               <input

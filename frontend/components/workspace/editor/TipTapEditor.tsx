@@ -10,7 +10,6 @@ import TableRow from "@tiptap/extension-table-row"
 import TableHeader from "@tiptap/extension-table-header"
 import TableCell from "@tiptap/extension-table-cell"
 import Placeholder from "@tiptap/extension-placeholder"
-import Image from "@tiptap/extension-image"
 import { Markdown } from "tiptap-markdown"
 import { toast } from "sonner"
 import { Minimize2 } from "lucide-react"
@@ -21,6 +20,7 @@ import StyleKeyExtension from "./extensions/StyleKeyExtension"
 import { WordStyleApplierPlugin } from "./extensions/WordStyleApplier"
 import FontFamily from "@tiptap/extension-font-family"
 import { FloatingAIToolbar } from "./FloatingAIToolbar"
+import CustomImage from "./extensions/CustomImage"
 
 /**
  * style-key 标记逻辑已迁移到 StyleKeyExtension（MutationObserver 方案）。
@@ -75,7 +75,7 @@ function buildTemplateStyle(
       "--tpl-body-align": "left",
     } as React.CSSProperties
   }
-  const { styles, layout } = config
+  const { styles, layout, headingStyles, paragraphStyles, imageStyles } = config
   const body = styles?.body ?? {}
   const h1 = styles?.heading_1 ?? {}
   const h2 = styles?.heading_2 ?? {}
@@ -84,6 +84,26 @@ function buildTemplateStyle(
   const h5 = styles?.heading_5 ?? {}
   const title = styles?.document_title ?? {}
   const subtitle = styles?.document_subtitle ?? styles?.subject_info ?? {}
+
+  // headingStyles 优先级高于 styles.heading_N
+  const hsH1 = headingStyles?.h1?.font ?? {}
+  const hsH2 = headingStyles?.h2?.font ?? {}
+  const hsH3 = headingStyles?.h3?.font ?? {}
+  const hsH4 = headingStyles?.h4?.font ?? {}
+  const hsH5 = headingStyles?.h5?.font ?? {}
+  const h1Effective = { ...h1, ...hsH1 }
+  const h2Effective = { ...h2, ...hsH2 }
+  const h3Effective = { ...h3, ...hsH3 }
+  const h4Effective = { ...h4, ...hsH4 }
+  const h5Effective = { ...h5, ...hsH5 }
+
+  // paragraphStyles 补充正文样式
+  const bodyEffective = {
+    ...body,
+    align: paragraphStyles?.align ?? body.align,
+    lineHeight: paragraphStyles?.lineHeight ?? body.lineHeight,
+    firstLineIndentChars: paragraphStyles?.firstLineIndentChars ?? body.firstLineIndentChars,
+  }
 
   const FONT_ID_MAP: Record<string, string> = {
     FangSong_GB2312: '"仿宋_GB2312", "FangSong", serif',
@@ -105,13 +125,13 @@ function buildTemplateStyle(
   const fontVar = (id?: string) => (id ? (FONT_ID_MAP[id] ?? id) : undefined)
 
   const result = {
-    "--tpl-body-font": fontVar(body.fontFamily) ?? "inherit",
-    "--tpl-body-size": body.fontSizePt ? `${body.fontSizePt}pt` : undefined,
-    "--tpl-body-weight": body.bold ? "700" : "400",
-    "--tpl-body-align": body.align ?? "left",
+    "--tpl-body-font": fontVar(bodyEffective.fontFamily ?? body.fontFamily) ?? "inherit",
+    "--tpl-body-size": bodyEffective.fontSizePt ? `${bodyEffective.fontSizePt}pt` : undefined,
+    "--tpl-body-weight": bodyEffective.bold ? "700" : "400",
+    "--tpl-body-align": bodyEffective.align ?? "left",
     "--tpl-body-line-height":
-      (layout?.defaultLineHeight ?? body.lineHeight)?.toString() ?? undefined,
-    "--tpl-body-indent": `${layout?.defaultFirstLineIndentChars ?? body.firstLineIndentChars ?? 0}em`,
+      (layout?.defaultLineHeight ?? bodyEffective.lineHeight)?.toString() ?? undefined,
+    "--tpl-body-indent": `${layout?.defaultFirstLineIndentChars ?? bodyEffective.firstLineIndentChars ?? 0}em`,
     "--tpl-paragraph-space-before": `${layout?.defaultParagraphSpacingBeforePt ?? 0}pt`,
     "--tpl-paragraph-space-after": `${layout?.defaultParagraphSpacingAfterPt ?? 0}pt`,
     "--tpl-title-font": fontVar(title.fontFamily) ?? "inherit",
@@ -124,29 +144,54 @@ function buildTemplateStyle(
       : undefined,
     "--tpl-subtitle-align": subtitle.align ?? "center",
     "--tpl-subtitle-weight": subtitle.bold ? "700" : "400",
-    "--tpl-h1-font": fontVar(h1.fontFamily) ?? "inherit",
-    "--tpl-h1-size": h1.fontSizePt ? `${h1.fontSizePt}pt` : undefined,
-    "--tpl-h1-weight": h1.bold ? "700" : "400",
-    "--tpl-h1-align": h1.align ?? "left",
-    "--tpl-h2-font": fontVar(h2.fontFamily) ?? "inherit",
-    "--tpl-h2-size": h2.fontSizePt ? `${h2.fontSizePt}pt` : undefined,
-    "--tpl-h2-weight": h2.bold ? "700" : "400",
-    "--tpl-h2-align": h2.align ?? "left",
-    "--tpl-h3-font": fontVar(h3.fontFamily) ?? "inherit",
-    "--tpl-h3-size": h3.fontSizePt ? `${h3.fontSizePt}pt` : undefined,
-    "--tpl-h3-weight": h3.bold ? "700" : "400",
-    "--tpl-h3-align": h3.align ?? "left",
-    "--tpl-h4-font": fontVar(h4.fontFamily) ?? "inherit",
-    "--tpl-h4-size": h4.fontSizePt ? `${h4.fontSizePt}pt` : undefined,
-    "--tpl-h4-weight": h4.bold ? "700" : "400",
-    "--tpl-h4-align": h4.align ?? "left",
-    "--tpl-h5-font": fontVar(h5.fontFamily) ?? "inherit",
-    "--tpl-h5-size": h5.fontSizePt ? `${h5.fontSizePt}pt` : undefined,
-    "--tpl-h5-weight": h5.bold ? "700" : "400",
-    "--tpl-h5-align": h5.align ?? "left",
+    "--tpl-h1-font": fontVar(h1Effective.fontFamily) ?? "inherit",
+    "--tpl-h1-size": h1Effective.fontSizePt ? `${h1Effective.fontSizePt}pt` : undefined,
+    "--tpl-h1-weight": h1Effective.bold ? "700" : "400",
+    "--tpl-h1-align": headingStyles?.h1?.align ?? h1Effective.align ?? "left",
+    "--tpl-h2-font": fontVar(h2Effective.fontFamily) ?? "inherit",
+    "--tpl-h2-size": h2Effective.fontSizePt ? `${h2Effective.fontSizePt}pt` : undefined,
+    "--tpl-h2-weight": h2Effective.bold ? "700" : "400",
+    "--tpl-h2-align": headingStyles?.h2?.align ?? h2Effective.align ?? "left",
+    "--tpl-h3-font": fontVar(h3Effective.fontFamily) ?? "inherit",
+    "--tpl-h3-size": h3Effective.fontSizePt ? `${h3Effective.fontSizePt}pt` : undefined,
+    "--tpl-h3-weight": h3Effective.bold ? "700" : "400",
+    "--tpl-h3-align": headingStyles?.h3?.align ?? h3Effective.align ?? "left",
+    "--tpl-h4-font": fontVar(h4Effective.fontFamily) ?? "inherit",
+    "--tpl-h4-size": h4Effective.fontSizePt ? `${h4Effective.fontSizePt}pt` : undefined,
+    "--tpl-h4-weight": h4Effective.bold ? "700" : "400",
+    "--tpl-h4-align": headingStyles?.h4?.align ?? h4Effective.align ?? "left",
+    "--tpl-h5-font": fontVar(h5Effective.fontFamily) ?? "inherit",
+    "--tpl-h5-size": h5Effective.fontSizePt ? `${h5Effective.fontSizePt}pt` : undefined,
+    "--tpl-h5-weight": h5Effective.bold ? "700" : "400",
+    "--tpl-h5-align": headingStyles?.h5?.align ?? h5Effective.align ?? "left",
     "--tpl-margin": layout
       ? `${layout.marginTopMm ?? 25}mm ${layout.marginRightMm ?? 20}mm ${layout.marginBottomMm ?? 25}mm ${layout.marginLeftMm ?? 20}mm`
       : undefined,
+    // 图片样式变量
+    "--tpl-img-wrap-type": imageStyles?.position?.wrapType ?? 'inline',
+    "--tpl-img-align": imageStyles?.position?.horizontalAlign ?? 'left',
+    "--tpl-img-margin-top": imageStyles?.spacing?.marginTopCm ? `${imageStyles.spacing.marginTopCm}cm` : '0',
+    "--tpl-img-margin-bottom": imageStyles?.spacing?.marginBottomCm ? `${imageStyles.spacing.marginBottomCm}cm` : '0',
+    "--tpl-img-margin-left": imageStyles?.spacing?.marginLeftCm ? `${imageStyles.spacing.marginLeftCm}cm` : '0',
+    "--tpl-img-margin-right": imageStyles?.spacing?.marginRightCm ? `${imageStyles.spacing.marginRightCm}cm` : '0',
+    // 边框：优先从 border 读取，兼容 position.borderWidthPt
+    "--tpl-img-border": (imageStyles?.border?.showBorder || imageStyles?.position?.borderWidthPt)
+      ? `${imageStyles?.border?.borderWidthPt ?? imageStyles?.position?.borderWidthPt ?? 5}pt solid ${imageStyles?.border?.color ?? imageStyles?.position?.borderColor ?? '#000000'}`
+      : 'none',
+    // 图片效果：亮度、对比度
+    "--tpl-img-filter": (() => {
+      const brightness = imageStyles?.style?.brightness ?? 0
+      const contrast = imageStyles?.style?.contrast ?? 0
+      if (brightness === 0 && contrast === 0) return 'none'
+      const b = 1 + brightness / 100
+      const c = 1 + contrast / 100
+      return `brightness(${b}) contrast(${c})`
+    })(),
+    // 图片最大尺寸限制
+    "--tpl-img-max-width": imageStyles?.position?.maxWidthCm ? `${imageStyles.position.maxWidthCm}cm` : undefined,
+    "--tpl-img-max-height": imageStyles?.position?.maxHeightCm ? `${imageStyles.position.maxHeightCm}cm` : undefined,
+    // 图片行间距
+    "--tpl-img-line-spacing": imageStyles?.lineSpacing ? `${imageStyles.lineSpacing}` : undefined,
   } as React.CSSProperties
 
   return result
@@ -246,7 +291,7 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
       TableRow,
       TableHeader,
       TableCell,
-      Image,
+      CustomImage,
       Placeholder.configure({
         placeholder: "",
       }),
@@ -367,6 +412,70 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
     }
   }, [editor, previewConfig?.styles?.document_title?.bold, updateDraftStyle])
 
+  // 监听 headingStyles 变化：切换到标题时应用对应样式
+  useEffect(() => {
+    if (!editor || !previewConfig?.headingStyles) return
+
+    const headingStyles = previewConfig.headingStyles
+
+    const updateHeadingStyle = () => {
+      const { from, to } = editor.state.selection
+      const $from = editor.state.doc.resolve(from)
+      const depth = $from.depth
+
+      // 向上查找最近的 heading 节点
+      let headingNode = null
+      let level = 0
+      for (let d = depth; d >= 1; d--) {
+        const node = $from.node(d)
+        if (node.type.name === 'heading') {
+          headingNode = node
+          level = node.attrs.level
+          break
+        }
+      }
+
+      if (!headingNode) return
+
+      const hs = headingStyles[`h${level}`]
+      if (!hs?.font) return
+
+      const font = hs.font
+      const marks: Record<string, string> = {}
+      if (font.fontFamily) {
+        marks['fontFamily'] = font.fontFamily
+      }
+      if (font.fontSizePt) {
+        marks['fontSize'] = `${font.fontSizePt}pt`
+      }
+      if (font.color) {
+        marks['color'] = font.color
+      }
+      if (font.bold) {
+        marks['fontWeight'] = 'bold'
+      } else if (font.bold === false) {
+        marks['fontWeight'] = 'normal'
+      }
+      if (font.italic) {
+        marks['fontStyle'] = 'italic'
+      } else if (font.italic === false) {
+        marks['fontStyle'] = 'normal'
+      }
+
+      if (Object.keys(marks).length > 0) {
+        editor.chain().focus().updateAttributes('textStyle', marks).run()
+      }
+    }
+
+    editor.on('selectionUpdate', updateHeadingStyle)
+    editor.on('transaction', updateHeadingStyle)
+
+    return () => {
+      editor.off('selectionUpdate', updateHeadingStyle)
+      editor.off('transaction', updateHeadingStyle)
+    }
+  }, [editor, previewConfig?.headingStyles])
+
   // 响应外部 content 变化（如 AI 对话填入内容）
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
@@ -473,15 +582,143 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
   useEffect(() => {
     if (!editor) return
     const onInsertImage = (e: Event) => {
-      const base64 = (e as CustomEvent).detail
-      if (base64 && editor) {
-        editor.chain().focus().setImage({ src: base64 }).run()
-      }
+      const { base64 } = (e as CustomEvent).detail
+      
+      if (!base64 || !editor) return
+      
+      // 从模板配置读取图片样式
+      const config = useEditorStore.getState().draftTemplateConfig 
+        ?? useEditorStore.getState().templateBinding?.configSnapshot 
+        ?? null
+      const imageStyles = config?.imageStyles
+      const position = imageStyles?.position ?? {}
+      const spacing = imageStyles?.spacing ?? {}
+      const border = imageStyles?.border ?? {}
+      const style = imageStyles?.style ?? {}
+      // 兼容 border.borderWidthPt 和 position.borderWidthPt
+      const borderWidthPt = border.borderWidthPt ?? position.borderWidthPt ?? 0
+      const showBorder = border.showBorder || borderWidthPt > 0
+      const borderColor = border.color ?? position.borderColor ?? '#000000'
+      
+      editor.chain().focus().setImage({ 
+        src: base64,
+        wrapType: position.wrapType ?? 'inline',
+        imgAlign: position.horizontalAlign ?? 'left',
+        borderWidthPt,
+        showBorder,
+        borderColor,
+        marginTopCm: spacing.marginTopCm ?? 0,
+        marginBottomCm: spacing.marginBottomCm ?? 0,
+        marginLeftCm: spacing.marginLeftCm ?? 0,
+        marginRightCm: spacing.marginRightCm ?? 0,
+        // 图片效果
+        brightness: style.brightness ?? 0,
+        contrast: style.contrast ?? 0,
+        // 图片基础设置
+        sizeMode: position.sizeMode ?? 'original',
+        maxWidthCm: position.maxWidthCm,
+        maxHeightCm: position.maxHeightCm,
+        keepAspectRatio: position.keepAspectRatio ?? true,
+        // 行间距
+        lineSpacing: imageStyles?.lineSpacing ?? 1.0,
+      }).run()
     }
     window.addEventListener("editor-insert-image", onInsertImage)
     return () =>
       window.removeEventListener("editor-insert-image", onInsertImage)
   }, [editor])
+
+  // 监听模板配置变化，更新现有图片的属性
+  useEffect(() => {
+    if (!editor) {
+      console.log('[TipTapEditor] 图片同步跳过: editor 未就绪')
+      return
+    }
+    if (!previewConfig) {
+      console.log('[TipTapEditor] 图片同步跳过: previewConfig 为空')
+      return
+    }
+    const imageStyles = previewConfig.imageStyles
+    if (!imageStyles) {
+      console.log('[TipTapEditor] 图片同步跳过: imageStyles 为空')
+      return
+    }
+
+    const position = imageStyles.position ?? {}
+    const spacing = imageStyles.spacing ?? {}
+    const border = imageStyles.border ?? {}
+    const style = imageStyles.style ?? {}
+    const { wrapType, horizontalAlign, sizeMode, maxWidthCm, maxHeightCm, keepAspectRatio } = position
+    // 兼容两种格式：border.borderWidthPt 和 position.borderWidthPt
+    const borderWidthPt = border.borderWidthPt ?? position.borderWidthPt
+    const showBorder = border.showBorder ?? (borderWidthPt !== undefined && borderWidthPt > 0)
+    const borderColor = border.color ?? position.borderColor ?? '#000000'
+    console.log('[TipTapEditor] 图片同步触发:', { wrapType, horizontalAlign, border, position, borderWidthPt, showBorder, style })
+
+    // 遍历所有图片，按配置更新属性
+    const result = editor.chain().command(({ tr, state }) => {
+      let modified = false
+      let count = 0
+      state.doc.descendants((node, pos) => {
+        if (node.type.name === 'image') {
+          count++
+          const newAttrs: Record<string, any> = { ...node.attrs }
+          // 位置属性
+          if (wrapType) newAttrs.wrapType = wrapType
+          if (horizontalAlign) newAttrs.imgAlign = horizontalAlign
+          // 边框属性
+          if (borderWidthPt !== undefined) newAttrs.borderWidthPt = borderWidthPt
+          if (showBorder !== undefined) newAttrs.showBorder = showBorder
+          if (borderColor) newAttrs.borderColor = borderColor
+          // 间距属性
+          if (spacing.marginTopCm !== undefined) newAttrs.marginTopCm = spacing.marginTopCm
+          if (spacing.marginBottomCm !== undefined) newAttrs.marginBottomCm = spacing.marginBottomCm
+          if (spacing.marginLeftCm !== undefined) newAttrs.marginLeftCm = spacing.marginLeftCm
+          if (spacing.marginRightCm !== undefined) newAttrs.marginRightCm = spacing.marginRightCm
+          // 效果属性
+          if (style.brightness !== undefined) newAttrs.brightness = style.brightness
+          if (style.contrast !== undefined) newAttrs.contrast = style.contrast
+          // 基础设置
+          if (sizeMode) newAttrs.sizeMode = sizeMode
+          if (maxWidthCm !== undefined) newAttrs.maxWidthCm = maxWidthCm
+          if (maxHeightCm !== undefined) newAttrs.maxHeightCm = maxHeightCm
+          if (keepAspectRatio !== undefined) newAttrs.keepAspectRatio = keepAspectRatio
+          // 行间距
+          if (imageStyles.lineSpacing !== undefined) newAttrs.lineSpacing = imageStyles.lineSpacing
+          tr.setNodeMarkup(pos, undefined, newAttrs)
+          modified = true
+        }
+      })
+      console.log(`[TipTapEditor] 找到 ${count} 张图片，已更新`)
+      return modified
+    }).run()
+
+    console.log('[TipTapEditor] 图片样式同步完成')
+  }, [editor, previewConfig?.imageStyles])
+
+  // 暴露强制刷新图片样式的方法到全局
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).__refreshImageStyles = () => {
+        if (!editor || !previewConfig?.imageStyles) return
+        const { wrapType, horizontalAlign } = previewConfig.imageStyles.position ?? {}
+        if (!wrapType && !horizontalAlign) return
+        
+        editor.chain().command(({ tr, state }) => {
+          let count = 0
+          state.doc.descendants((node, pos) => {
+            if (node.type.name === 'image') {
+              count++
+              if (wrapType) tr.setNodeMarkup(pos, undefined, { ...node.attrs, wrapType })
+              if (horizontalAlign) tr.setNodeMarkup(pos, undefined, { ...node.attrs, imgAlign: horizontalAlign })
+            }
+          })
+          console.log(`[手动刷新] 更新了 ${count} 张图片`)
+          return count > 0
+        }).run()
+      }
+    }
+  }, [editor, previewConfig?.imageStyles])
 
   // ESC 退出全屏
   useEffect(() => {

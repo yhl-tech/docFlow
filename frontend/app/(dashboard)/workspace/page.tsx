@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { WorkspaceChat } from '@/components/workspace/WorkspaceChat'
 import { WorkspaceEditor } from '@/components/workspace/WorkspaceEditor'
 import { WorkspaceHeader } from '@/components/workspace/WorkspaceHeader'
+import { ExportDebugPanel } from '@/components/workspace/editor/ExportDebugPanel'
 import authService from '@/lib/api/auth'
 import { useAuthStore } from '@/store/authStore'
 
@@ -68,6 +69,9 @@ export default function WorkspacePage() {
         {/* 右侧创作工作台 - 核心编辑区域 */}
         <WorkspaceEditor />
       </div>
+
+      {/* 导出调试面板 */}
+      <ExportDebugPanel />
     </div>
   )
 }

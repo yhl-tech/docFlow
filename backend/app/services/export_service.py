@@ -685,6 +685,81 @@ class ExportService:
         chunks.append(markdown[last_end:])
         return "".join(chunks)
 
+    async def _preprocess_images(self, markdown: str, tmpdir: str) -> str:
+        """
+        处理 Markdown 中的图片：
+        1. 服务器图片 URL（如 /assets/uploads/images/xxx.png）→ 复制到临时目录
+        2. Base64 图片（data:image/xxx;base64,xxxxx）→ 解码保存到临时目录
+        处理后替换为本地文件名，让 pandoc 能正确嵌入图片。
+        """
+        import base64
+        import uuid
+
+        # 匹配 markdown 图片语法: ![alt](url)
+        image_pattern = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
+
+        # 获取 assets 目录的绝对路径
+        assets_dir = Path(__file__).parent.parent.parent / "assets"
+
+        def process_match(m: re.Match) -> str:
+            alt_text = m.group(1)
+            url = m.group(2)
+
+            # 处理 Base64 图片
+            if url.startswith("data:image/"):
+                try:
+                    # 解析 data:image/png;base64,xxxxx 格式
+                    header, data = url.split(",", 1)
+                    # 提取 mime 类型
+                    mime_match = re.search(r"data:image/(\w+);", header)
+                    if not mime_match:
+                        _log.warning(f"无法识别的 Base64 图片格式: {header[:50]}...")
+                        return m.group(0)
+                    ext = mime_match.group(1)
+                    # 解码并保存
+                    image_data = base64.b64decode(data)
+                    filename = f"{uuid.uuid4().hex}.{ext}"
+                    local_path = os.path.join(tmpdir, filename)
+                    with open(local_path, "wb") as f:
+                        f.write(image_data)
+                    _log.debug(f"保存 Base64 图片: {filename} ({len(image_data)} bytes)")
+                    return f"![{alt_text}]({filename})"
+                except Exception as e:
+                    _log.warning(f"处理 Base64 图片失败: {e}")
+                    return m.group(0)
+
+            # 处理相对路径的服务器图片（/assets/uploads/images/...）
+            if not url.startswith("/assets/uploads/images/"):
+                return m.group(0)
+
+            filename = url.split("/")[-1]
+            source_path = assets_dir / "uploads" / "images" / filename
+            local_path = os.path.join(tmpdir, filename)
+
+            try:
+                if source_path.exists():
+                    shutil.copy2(source_path, local_path)
+                    _log.debug(f"复制图片到本地: {local_path}")
+                    # 返回本地文件引用（只需要文件名，因为 --resource-path 会搜索 tmpdir）
+                    return f"![{alt_text}]({filename})"
+                else:
+                    _log.warning(f"图片文件不存在: {source_path}")
+                    return m.group(0)
+            except Exception as e:
+                _log.warning(f"复制图片失败: {source_path}, 错误: {e}")
+                return m.group(0)
+
+        # 同步处理所有匹配（文件操作是同步的，但很快）
+        processed = markdown
+        # 从后往前替换，避免位置偏移问题
+        matches = list(image_pattern.finditer(markdown))
+        matches.reverse()
+        for m in matches:
+            result = process_match(m)
+            processed = processed[:m.start()] + result + processed[m.end():]
+
+        return processed
+
     # ------------------------------------------------------------------ #
     #  模板 reference-doc 路径
     # ------------------------------------------------------------------ #
@@ -809,6 +884,22 @@ class ExportService:
         snapshot = template_binding.get("configSnapshot") or {}
         return snapshot.get("imageStyles") or {}
 
+    @staticmethod
+    def _binding_heading_styles(template_binding: Optional[dict[str, Any]]) -> dict[str, Any]:
+        """获取标题样式配置（h1~h6）"""
+        if not template_binding:
+            return {}
+        snapshot = template_binding.get("configSnapshot") or {}
+        return snapshot.get("headingStyles") or {}
+
+    @staticmethod
+    def _binding_paragraph_styles(template_binding: Optional[dict[str, Any]]) -> dict[str, Any]:
+        """获取段落样式配置"""
+        if not template_binding:
+            return {}
+        snapshot = template_binding.get("configSnapshot") or {}
+        return snapshot.get("paragraphStyles") or {}
+
     def _resolve_page_size(self, page_size: str, template_binding: Optional[dict[str, Any]]) -> str:
         layout = self._binding_layout(template_binding)
         return layout.get("paperSize") or page_size or "A4"
@@ -892,12 +983,63 @@ class ExportService:
         code_styles = self._binding_codeblock_styles(template_binding)
         css_parts = []
 
-        if code_styles.get("borderColor"):
-            css_parts.append(f"  border: {code_styles.get('borderWidthPt', 0.5)}pt solid {code_styles['borderColor']};")
-        if code_styles.get("shadingColor"):
-            css_parts.append(f"  background-color: {code_styles['shadingColor']};")
-        if code_styles.get("textColor"):
-            css_parts.append(f"  color: {code_styles['textColor']};")
+        border = code_styles.get("border") or {}
+        if border.get("color"):
+            width = border.get("widthPt", 0.5)
+            style = border.get("style", "solid")
+            radius = border.get("borderRadiusPt", 0)
+            css_parts.append(
+                f"  border: {width}pt {style} {border['color']};"
+            )
+            if radius and radius > 0:
+                css_parts.append(f"  border-radius: {radius}pt;")
+
+        shading = code_styles.get("shading") or {}
+        if shading.get("fill"):
+            css_parts.append(f"  background-color: {shading['fill']};")
+
+        # 内边距
+        padding = code_styles.get("padding") or {}
+        if padding:
+            top = padding.get("topPt", 8)
+            bottom = padding.get("bottomPt", 8)
+            left = padding.get("leftPt", 12)
+            right = padding.get("rightPt", 12)
+            css_parts.append(f"  padding: {top}pt {right}pt {bottom}pt {left}pt;")
+
+        # 行间距
+        line_spacing = code_styles.get("lineSpacing")
+        if line_spacing:
+            css_parts.append(f"  line-height: {line_spacing};")
+
+        # 对齐方式
+        alignment = code_styles.get("alignment", "left")
+        if alignment != "left":
+            css_parts.append(f"  text-align: {alignment};")
+
+        # 字体基础样式
+        font = code_styles.get("font") or {}
+        if font.get("fontFamily"):
+            css_parts.append(f"  font-family: '{font['fontFamily']}', monospace;")
+        if font.get("fontSizePt"):
+            css_parts.append(f"  font-size: {font['fontSizePt']}pt;")
+        if font.get("color"):
+            css_parts.append(f"  color: {font['color']};")
+        if font.get("bold"):
+            css_parts.append("  font-weight: bold;")
+        if font.get("italic"):
+            css_parts.append("  font-style: italic;")
+
+        # 文字颜色
+        keyboard = code_styles.get("keyboardStyle") or {}
+        if keyboard.get("foregroundColor"):
+            css_parts.append(f"  color: {keyboard['foregroundColor']};")
+        if keyboard.get("backgroundColor"):
+            css_parts.append(f"  background-color: {keyboard['backgroundColor']};")
+
+        line_num = code_styles.get("lineNumber") or {}
+        if line_num.get("color"):
+            css_parts.append(f"  border-left: 2pt solid {line_num['color']}; padding-left: 8px;")
 
         return "\n".join(css_parts) + "\n" if css_parts else ""
 
@@ -906,17 +1048,213 @@ class ExportService:
         table_styles = self._binding_table_styles(template_binding)
         css_parts = []
 
+        # 表格对齐和宽度
+        table_align = table_styles.get("tableAlignment", "left")
+        table_width = table_styles.get("tableWidth", 100)
+        if table_align != "left":
+            css_parts.append(f"table {{ margin-left: auto; margin-right: auto; }}\n")
+        css_parts.append(f"table {{ width: {table_width}%; }}\n")
+
         border = table_styles.get("border", {})
-        if border.get("color"):
-            width = border.get("widthPt", 0.5)
-            style = border.get("style", "solid")
-            css_parts.append(f"table, th, td {{ border-color: {border['color']}; border-width: {width}pt; border-style: {style}; }}")
+        # 各边框独立开关
+        all_borders = []
+        if border.get("leftBorder", True):
+            all_borders.append(f"border-left: {border.get('widthPt', 0.5)}pt {border.get('style', 'single')} {border.get('color', '#000')};\n")
+        if border.get("rightBorder", True):
+            all_borders.append(f"border-right: {border.get('widthPt', 0.5)}pt {border.get('style', 'single')} {border.get('color', '#000')};\n")
+        if border.get("topBorder", True):
+            all_borders.append(f"border-top: {border.get('widthPt', 0.5)}pt {border.get('style', 'single')} {border.get('color', '#000')};\n")
+        if border.get("bottomBorder", True):
+            all_borders.append(f"border-bottom: {border.get('widthPt', 0.5)}pt {border.get('style', 'single')} {border.get('color', '#000')};\n")
+        if all_borders:
+            css_parts.append(f"td, th {{ {''.join(all_borders).strip()} }}\n")
+
+        # 内部边框
+        inside_h = border.get("insideHorizontalBorder", True)
+        inside_v = border.get("insideVerticalBorder", True)
+        inside_color = border.get("color", "#000")
+        inside_width = border.get("widthPt", 0.5)
+        inside_style = border.get("style", "single")
+        if not inside_h and not inside_v:
+            css_parts.append("td, th { border: none; }\n")
+        elif not inside_h:
+            css_parts.append(f"td, th {{ border-left: {inside_width}pt {inside_style} {inside_color}; border-right: {inside_width}pt {inside_style} {inside_color}; }}\n")
+        elif not inside_v:
+            css_parts.append(f"td, th {{ border-top: {inside_width}pt {inside_style} {inside_color}; border-bottom: {inside_width}pt {inside_style} {inside_color}; }}\n")
 
         shading = table_styles.get("shading", {})
+        shading_apply = shading.get("applyTo", "cell")
         if shading.get("fill"):
-            css_parts.append(f"th {{ background-color: {shading['fill']}; }}")
+            if shading_apply == "cell":
+                css_parts.append(f"td, th {{ background-color: {shading['fill']}; }}\n")
+            elif shading_apply == "table":
+                css_parts.append(f"table {{ background-color: {shading['fill']}; }}\n")
+
+        # 表头样式
+        header = table_styles.get("headerStyle") or {}
+        if header:
+            hf = header.get("font") or {}
+            if hf.get("fontFamily"):
+                css_parts.append(f"th {{ font-family: '{hf['fontFamily']}'; }}\n")
+            if hf.get("fontSizePt"):
+                css_parts.append(f"th {{ font-size: {hf['fontSizePt']}pt; }}\n")
+            if hf.get("color"):
+                css_parts.append(f"th {{ color: {hf['color']}; }}\n")
+            if hf.get("bold"):
+                css_parts.append("th { font-weight: bold; }\n")
+            if hf.get("italic"):
+                css_parts.append("th { font-style: italic; }\n")
+            if hf.get("underline"):
+                css_parts.append("th { text-decoration: underline; }\n")
+            if header.get("align"):
+                css_parts.append(f"th {{ text-align: {header['align']}; }}\n")
+            if header.get("valign"):
+                css_parts.append(f"th {{ vertical-align: {header['valign']}; }}\n")
+            if header.get("lineHeight"):
+                css_parts.append(f"th {{ line-height: {header['lineHeight']}; }}\n")
+            hs = header.get("shading")
+            if hs and hs.get("fill") and shading_apply == "cell":
+                css_parts.append(f"th {{ background-color: {hs['fill']}; }}\n")
+
+        # 数据行样式
+        data_row = table_styles.get("dataRowStyle") or {}
+        if data_row:
+            df = data_row.get("font") or {}
+            if df.get("fontFamily"):
+                css_parts.append(f"td {{ font-family: '{df['fontFamily']}'; }}\n")
+            if df.get("fontSizePt"):
+                css_parts.append(f"td {{ font-size: {df['fontSizePt']}pt; }}\n")
+            if df.get("color"):
+                css_parts.append(f"td {{ color: {df['color']}; }}\n")
+            if df.get("bold"):
+                css_parts.append("td { font-weight: bold; }\n")
+            if df.get("align"):
+                css_parts.append(f"td {{ text-align: {data_row['align']}; }}\n")
+            if data_row.get("valign"):
+                css_parts.append(f"td {{ vertical-align: {data_row['valign']}; }}\n")
+            if data_row.get("lineHeight"):
+                css_parts.append(f"td {{ line-height: {data_row['lineHeight']}; }}\n")
+
+        # 单元格内边距
+        cell_pad = table_styles.get("cellPadding") or {}
+        if cell_pad:
+            pad_top = cell_pad.get("top", 0.14)
+            pad_bottom = cell_pad.get("bottom", 0.14)
+            pad_left = cell_pad.get("left", 0)
+            pad_right = cell_pad.get("right", 0)
+            css_parts.append(f"td, th {{ padding: {pad_top}cm {pad_right}cm {pad_bottom}cm {pad_left}cm; }}\n")
 
         return "\n".join(css_parts) + "\n" if css_parts else ""
+
+    def _get_list_css(self, template_binding: Optional[dict[str, Any]]) -> str:
+        """生成列表样式 CSS"""
+        list_styles = self._binding_list_styles(template_binding)
+        css_parts = []
+
+        bullet = list_styles.get("bullet") or {}
+        if bullet.get("character"):
+            css_parts.append(f"list-style-type: '{bullet['character']}';")
+        if bullet.get("color"):
+            css_parts.append(f"color: {bullet['color']};")
+        if bullet.get("fontFamily"):
+            css_parts.append(f"font-family: '{bullet['fontFamily']}';")
+        if bullet.get("fontSizePt"):
+            css_parts.append(f"font-size: {bullet['fontSizePt']}pt;")
+        if bullet.get("bold"):
+            css_parts.append("font-weight: bold;")
+        if bullet.get("lineSpacing"):
+            css_parts.append(f"line-height: {bullet['lineSpacing']};")
+        if bullet.get("spacingBeforeLines"):
+            css_parts.append(f"margin-top: {bullet['spacingBeforeLines']}em;")
+        if bullet.get("spacingAfterLines"):
+            css_parts.append(f"margin-bottom: {bullet['spacingAfterLines']}em;")
+
+        ordered = list_styles.get("ordered") or {}
+        if ordered.get("color"):
+            css_parts.append(f"color: {ordered['color']};")
+        if ordered.get("fontFamily"):
+            css_parts.append(f"font-family: '{ordered['fontFamily']}';")
+        if ordered.get("fontSizePt"):
+            css_parts.append(f"font-size: {ordered['fontSizePt']}pt;")
+        if ordered.get("bold"):
+            css_parts.append("font-weight: bold;")
+        if ordered.get("lineSpacing"):
+            css_parts.append(f"line-height: {ordered['lineSpacing']};")
+        if ordered.get("align"):
+            css_parts.append(f"text-align: {ordered['align']};")
+
+        return " ".join(css_parts)
+
+    def _get_image_css(self, template_binding: Optional[dict[str, Any]]) -> str:
+        """生成图片样式 CSS"""
+        image_styles = self._binding_image_styles(template_binding)
+        css_parts = []
+
+        position = image_styles.get("position") or {}
+        wrap_type = position.get("wrapType", "inline")
+        if wrap_type == "inline":
+            css_parts.append("display: block;")
+        elif wrap_type in ("square", "tight", "through"):
+            css_parts.append("float: left; margin-right: 8px;")
+        elif wrap_type == "topAndBottom":
+            css_parts.append("display: block; margin-left: auto; margin-right: auto;")
+        elif wrap_type == "behind":
+            css_parts.append("position: absolute; z-index: -1;")
+        elif wrap_type == "inFront":
+            css_parts.append("position: absolute; z-index: 1;")
+
+        horizontal_align = position.get("horizontalAlign")
+        if horizontal_align == "center":
+            if wrap_type != "inline":
+                css_parts.append("display: block; margin-left: auto; margin-right: auto;")
+        elif horizontal_align == "right":
+            if wrap_type != "inline":
+                css_parts.append("display: block; margin-left: auto;")
+
+        # 图片边框（按配置显示）
+        border_cfg = image_styles.get("border") or {}
+        if border_cfg.get("showBorder"):
+            bw = position.get("borderWidthPt") or border_cfg.get("widthPt") or 0.75
+            bc = position.get("borderColor") or border_cfg.get("color") or "#000000"
+            css_parts.append(f"border: {bw}pt solid {bc};")
+
+        style_cfg = image_styles.get("style") or {}
+        brightness = style_cfg.get("brightness")
+        contrast = style_cfg.get("contrast")
+        if brightness is not None or contrast is not None:
+            b = 1 + (brightness or 0) / 100
+            c = 1 + (contrast or 0) / 100
+            css_parts.append(f"filter: brightness({b}) contrast({c});")
+
+        # 图片间距（上下左右独立）
+        spacing = image_styles.get("spacing") or {}
+        if spacing.get("marginTopCm"):
+            css_parts.append(f"margin-top: {spacing['marginTopCm']}cm;")
+        if spacing.get("marginBottomCm"):
+            css_parts.append(f"margin-bottom: {spacing['marginBottomCm']}cm;")
+        if spacing.get("marginLeftCm"):
+            css_parts.append(f"margin-left: {spacing['marginLeftCm']}cm;")
+        if spacing.get("marginRightCm"):
+            css_parts.append(f"margin-right: {spacing['marginRightCm']}cm;")
+
+        # 尺寸模式：最大尺寸限制
+        size_mode = position.get("sizeMode")
+        if size_mode == "maxLimit":
+            max_w = position.get("maxWidthCm")
+            max_h = position.get("maxHeightCm")
+            if max_w:
+                css_parts.append(f"max-width: {max_w}cm;")
+            if max_h:
+                css_parts.append(f"max-height: {max_h}cm;")
+            if position.get("keepAspectRatio") is not False:
+                css_parts.append("height: auto;")
+
+        # 行间距
+        ls = image_styles.get("lineSpacing")
+        if ls and ls != 1.0:
+            css_parts.append(f"line-height: {ls};")
+
+        return " ".join(css_parts)
 
     def _pdf_header_html(
         self,
@@ -968,44 +1306,112 @@ class ExportService:
 
         title_font = self._font_display_name(title_style.get("fontFamily"), body_font)
         title_size = title_style.get("fontSizePt", 20)
-        return (
-            f"<style>\n"
-            f"@page {{ size: {page_size}; margin: {margin_top}mm {margin_right}mm {margin_bottom}mm {margin_left}mm; }}\n"
-            f"body {{\n"
-            f"  font-family: \"{body_font}\", {cjk};\n"
-            f"  font-size: {body_size}pt;\n"
-            f"  line-height: {body_line_height};\n"
-            f"  color: {color};\n"
-            f"}}\n"
-            f"p {{ text-indent: {body_indent}em; margin: {paragraph_before}pt 0 {paragraph_after}pt; }}\n"
-            f"h1.title, h1:first-of-type {{ font-family: \"{title_font}\", {cjk}; font-size: {title_size}pt; "
-            f"text-align: {title_style.get('align', 'center')}; font-weight: {_fw(bool(title_style.get('bold')))}; }}\n"
-            + _hcss("h1", h1_style, 16)
-            + _hcss("h2", h2_style, 15)
-            + _hcss("h3", h3_style, 14)
-            + _hcss("h4", h4_style, 13)
-            + _hcss("h5", h5_style, 12)
-            + "code, pre {\n"
-            "  font-family: \"Cascadia Code\", Consolas, \"Courier New\", monospace;\n"
-            "  font-size: 10pt;\n"
-            "  background: #f5f5f5;\n"
-            "  border-radius: 3px;\n"
-            "  padding: 0 3px;\n"
-            "}\n"
-            "pre {\n"
-            "  padding: 8px 12px;\n"
-            "  overflow-x: auto;\n"
-            + self._get_codeblock_css(template_binding)
-            + "}\n"
-            "table { border-collapse: collapse; width: 100%; }\n"
-            "th, td {\n"
-            "  border: 1px solid #ccc;\n"
-            "  padding: 6px 10px;\n"
-            "}\n"
-            "th { background: #f0f0f0; }\n"
-            + self._get_table_css(template_binding)
-            + "</style>\n"
+
+        # 段落样式（paragraphStyles）
+        para_css_parts: list[str] = []
+        ps = self._binding_paragraph_styles(template_binding)
+        if ps:
+            if ps.get("align"):
+                para_css_parts.append(f"text-align: {ps['align']}")
+            if ps.get("lineHeight"):
+                para_css_parts.append(f"line-height: {ps['lineHeight']}")
+            if ps.get("spacingBeforePt"):
+                para_css_parts.append(f"margin-top: {ps['spacingBeforePt']}pt")
+            if ps.get("spacingAfterPt"):
+                para_css_parts.append(f"margin-bottom: {ps['spacingAfterPt']}pt")
+            if ps.get("firstLineIndentChars"):
+                para_css_parts.append(f"text-indent: {ps['firstLineIndentChars']}em")
+        para_css = "\n  ".join(para_css_parts) if para_css_parts else ""
+
+        # 标题样式（headingStyles.h1~h6）
+        def _hscss(tag: str, hs: dict, fallback_size: int) -> str:
+            font_cfg = hs.get("font") or {}
+            font = self._font_display_name(font_cfg.get("fontFamily"), body_font)
+            size = font_cfg.get("fontSizePt", fallback_size)
+            bold = font_cfg.get("bold", True)
+            italic = font_cfg.get("italic", False)
+            color = font_cfg.get("color") or ""
+            color_css = f"color: {color};" if color else ""
+            italic_css = "font-style: italic;" if italic else ""
+            align = hs.get("align", "left")
+            line_height = f"line-height: {hs['lineHeight']};" if hs.get("lineHeight") else ""
+            spacing_before = f"margin-top: {hs['spacingBeforePt']}pt;" if hs.get("spacingBeforePt") else ""
+            spacing_after = f"margin-bottom: {hs['spacingAfterPt']}pt;" if hs.get("spacingAfterPt") else ""
+            indent = f"text-indent: {hs['firstLineIndentChars']}em;" if hs.get("firstLineIndentChars") else ""
+            return (
+                f"{tag} {{ font-family: \"{font}\", {cjk}; "
+                f"font-size: {size}pt; font-weight: {_fw(bold)}; "
+                f"{italic_css} {color_css} text-align: {align}; "
+                f"{line_height} {spacing_before} {spacing_after} {indent} }}\n"
+            )
+
+        hs_cfg = self._binding_heading_styles(template_binding)
+
+        # 英文单独字体
+        english_font_cfg = {}
+        if template_binding:
+            cfg = template_binding.get("configSnapshot") or {}
+            english_font_cfg = cfg.get("englishFont") or {}
+        use_english_font = english_font_cfg.get("useSeparateFont") or False
+        english_font_family = english_font_cfg.get("fontFamily")
+        english_font_css = ""
+        if use_english_font and english_font_family:
+            english_font_css = f'  font-family: "{english_font_family}", {cjk};\n'
+
+        css_parts: list[str] = [
+            f"<style>\n",
+            f"@page {{ size: {page_size}; margin: {margin_top}mm {margin_right}mm {margin_bottom}mm {margin_left}mm; }}\n",
+            f"body {{\n",
+            f"  font-family: \"{body_font}\", {cjk};\n",
+            english_font_css,
+            f"  font-size: {body_size}pt;\n",
+            f"  line-height: {body_line_height};\n",
+            f"  color: {color};\n",
+            f"}}\n",
+        ]
+        if para_css:
+            css_parts.append(
+                f"p {{ text-indent: {body_indent}em; margin: {paragraph_before}pt 0 {paragraph_after}pt; {para_css}; }}\n"
+            )
+        css_parts.append(
+            f"h1.title, h1:first-of-type {{ font-family: \"{title_font}\", {cjk}; "
+            f"font-size: {title_size}pt; "
+            f"text-align: {title_style.get('align', 'center')}; "
+            f"font-weight: {_fw(bool(title_style.get('bold')))}; }}\n"
         )
+        css_parts.append(_hcss("h1", h1_style, 16))
+        css_parts.append(_hcss("h2", h2_style, 15))
+        css_parts.append(_hcss("h3", h3_style, 14))
+        css_parts.append(_hcss("h4", h4_style, 13))
+        css_parts.append(_hcss("h5", h5_style, 12))
+        # 2~6级标题样式（来自 headingStyles）
+        for level, fallback in [("h1", 16), ("h2", 15), ("h3", 14), ("h4", 13), ("h5", 12), ("h6", 11)]:
+            hs = hs_cfg.get(level)
+            if hs:
+                css_parts.append(_hscss(level, hs, fallback))
+        css_parts.append("code {\n")
+        css_parts.append("  font-family: \"Cascadia Code\", Consolas, \"Courier New\", monospace;\n")
+        css_parts.append("  font-size: 10pt;\n")
+        css_parts.append("  background: #f5f5f5;\n")
+        css_parts.append("  border-radius: 3px;\n")
+        css_parts.append("  padding: 0 3px;\n")
+        css_parts.append("}\n")
+        css_parts.append("pre {\n")
+        codeblock_css = self._get_codeblock_css(template_binding)
+        if codeblock_css:
+            css_parts.append(codeblock_css)
+        else:
+            css_parts.append("  padding: 8px 12px;\n")
+            css_parts.append("  overflow-x: auto;\n")
+            css_parts.append("  background: #f5f5f5;\n")
+        css_parts.append("}\n")
+        css_parts.append("table { border-collapse: collapse; width: 100%; }\n")
+        css_parts.append(self._get_table_css(template_binding))
+        css_parts.append("ul { " + self._get_list_css(template_binding) + " }\n")
+        css_parts.append("ol { " + self._get_list_css(template_binding) + " }\n")
+        css_parts.append("img { " + self._get_image_css(template_binding) + " }\n")
+        css_parts.append("</style>\n")
+        return "".join(css_parts)
 
     def _pdf_header_latex(
         self,
@@ -1081,7 +1487,10 @@ class ExportService:
             semantic_markdown = self._apply_template_semantics(markdown, template, template_binding)
             processed = await self._preprocess_mermaid(semantic_markdown, tmpdir)
 
-            # 2. 写入临时文件
+            # 2. 图片 URL 下载（服务器图片 → 本地文件）
+            processed = await self._preprocess_images(processed, tmpdir)
+
+            # 3. 写入临时文件
             input_path = os.path.join(tmpdir, "input.md")
             output_path = os.path.join(tmpdir, "output.pdf")
 
@@ -1204,7 +1613,10 @@ class ExportService:
             semantic_markdown = self._apply_template_semantics(markdown, template, template_binding)
             processed = await self._preprocess_mermaid(semantic_markdown, tmpdir)
 
-            # 2. 写入临时 Markdown 文件（UTF-8 BOM 以确保 pandoc 正确识别中文）
+            # 2. 图片 URL 下载（服务器图片 → 本地文件）
+            processed = await self._preprocess_images(processed, tmpdir)
+
+            # 3. 写入临时 Markdown 文件（UTF-8 BOM 以确保 pandoc 正确识别中文）
             input_path = os.path.join(tmpdir, "input.md")
             output_path = os.path.join(tmpdir, "output.docx")
 
@@ -1373,6 +1785,20 @@ class ExportService:
             heading3_cfg = styles_cfg.get("heading_3", {})
             heading4_cfg = styles_cfg.get("heading_4", {})
             heading5_cfg = styles_cfg.get("heading_5", {})
+            # 合并 headingStyles（level2-level6）到对应 heading 配置
+            hs_cfg = self._binding_heading_styles(template_binding)
+            if hs_cfg.get("level2"):
+                heading2_cfg = {**heading2_cfg, **hs_cfg["level2"]}
+            if hs_cfg.get("level3"):
+                heading3_cfg = {**heading3_cfg, **hs_cfg["level3"]}
+            if hs_cfg.get("level4"):
+                heading4_cfg = {**heading4_cfg, **hs_cfg["level4"]}
+            if hs_cfg.get("level5"):
+                heading5_cfg = {**heading5_cfg, **hs_cfg["level5"]}
+            if hs_cfg.get("level6"):
+                heading6_cfg = hs_cfg["level6"]
+            else:
+                heading6_cfg = {}
 
             default_cjk_font = self._font_display_name(
                 body_cfg.get("fontFamily"), self._font_display_name(cjk_font)
@@ -1406,6 +1832,14 @@ class ExportService:
                 "Heading 4": self._font_display_name(heading4_cfg.get("fontFamily"), default_cjk_font),
                 "Heading 5": self._font_display_name(heading5_cfg.get("fontFamily"), default_cjk_font),
             }
+            # 英文单独字体配置
+            english_font_cfg = {}
+            if template_binding:
+                cfg = template_binding.get("configSnapshot") or {}
+                english_font_cfg = cfg.get("englishFont") or {}
+            use_english_font = english_font_cfg.get("useSeparateFont") or False
+            english_font_family = english_font_cfg.get("fontFamily") or "Times New Roman"
+
             def _to_bool(val, default=False):
                 """将值转换为布尔值"""
                 if val is None:
@@ -1425,6 +1859,7 @@ class ExportService:
                 "Heading 3": _to_bool(heading3_cfg.get("bold"), False),
                 "Heading 4": _to_bool(heading4_cfg.get("bold"), False),
                 "Heading 5": _to_bool(heading5_cfg.get("bold"), False),
+                "Heading 6": _to_bool((heading6_cfg.get("font") or {}).get("bold", False), False),
             }
             _style_size_map: dict[str, float] = {
                 "Normal":    float(default_body_size),
@@ -1512,7 +1947,7 @@ class ExportService:
                 rPr_default = OxmlElement("w:rPr")
                 rPr_default_wrap.append(rPr_default)
 
-            set_font_properties(rPr_default, default_cjk_font, "Times New Roman", "Times New Roman")
+            set_font_properties(rPr_default, default_cjk_font, english_font_family if use_english_font else "Times New Roman", english_font_family if use_english_font else "Times New Roman")
             ExportService._set_rpr_color_black(rPr_default)
 
             # ── 2. 段落 / 标题样式（字体 + 标题颜色统一为黑色）───────────────────
@@ -1523,7 +1958,13 @@ class ExportService:
                 "Heading 3": (self._font_display_name(heading3_cfg.get("fontFamily"), default_cjk_font), heading3_cfg.get("fontSizePt", 14)),
                 "Heading 4": (self._font_display_name(heading4_cfg.get("fontFamily"), default_cjk_font), heading4_cfg.get("fontSizePt", 13)),
                 "Heading 5": (self._font_display_name(heading5_cfg.get("fontFamily"), default_cjk_font), heading5_cfg.get("fontSizePt", 12)),
-                "Heading 6": (default_cjk_font, 12),
+                "Heading 6": (
+                    self._font_display_name(
+                        (heading6_cfg.get("font") or {}).get("fontFamily", default_cjk_font) if heading6_cfg else default_cjk_font,
+                        default_cjk_font
+                    ),
+                    ((heading6_cfg.get("font") or {}).get("fontSizePt") or 12) if heading6_cfg else 12,
+                ),
                 "Title":     (self._font_display_name(title_cfg.get("fontFamily"), default_cjk_font), title_cfg.get("fontSizePt", 20)),
                 "Subtitle":  (self._font_display_name(subtitle_cfg.get("fontFamily"), default_cjk_font), subtitle_cfg.get("fontSizePt", 14)),
                 "Default Paragraph Font": (default_cjk_font, default_body_size),
@@ -1532,7 +1973,7 @@ class ExportService:
                 try:
                     style = doc.styles[style_name]
                     rPr_elem = style.element.get_or_add_rPr()
-                    set_font_properties(rPr_elem, style_font, "Times New Roman", "Times New Roman")
+                    set_font_properties(rPr_elem, style_font, english_font_family if use_english_font else "Times New Roman", english_font_family if use_english_font else "Times New Roman")
                     sz = rPr_elem.find(qn("w:sz"))
                     if sz is None:
                         sz = OxmlElement("w:sz")
@@ -1586,7 +2027,7 @@ class ExportService:
                             break
                 _log.debug(f"[_normalize_rpr] run='{run_text}...', style={style_name}, bold={bold}")
                 
-                set_font_properties(rPr_elem_inner, font, "Times New Roman", "Times New Roman", None)  # 不覆盖粗体，保留原有设置
+                set_font_properties(rPr_elem_inner, font, english_font_family if use_english_font else "Times New Roman", english_font_family if use_english_font else "Times New Roman", None)
                 sz = rPr_elem_inner.find(qn("w:sz"))
                 if sz is None:
                     sz = OxmlElement("w:sz")
@@ -1652,16 +2093,24 @@ class ExportService:
                 "Heading 3": heading3_cfg,
                 "Heading 4": heading4_cfg,
                 "Heading 5": heading5_cfg,
+                "Heading 6": heading6_cfg,
                 "Title":     title_cfg,
                 "Subtitle":  subtitle_cfg,
             }
+            def _get_font(cfg: dict, key: str, default=None):
+                """从配置中获取字体属性，支持嵌套 font 对象和扁平结构"""
+                if cfg.get("font") and key in cfg["font"]:
+                    return cfg["font"][key]
+                return cfg.get(key, default)
             for style_name, cfg in heading_style_map.items():
                 if not cfg:
                     continue
                 try:
                     style = doc.styles[style_name]
-                    style.font.size = Pt(cfg.get("fontSizePt", default_body_size))
-                    style.font.bold = bool(cfg.get("bold", False))
+                    fs = _get_font(cfg, "fontSizePt", default_body_size)
+                    style.font.size = Pt(fs)
+                    bold_val = _get_font(cfg, "bold", False)
+                    style.font.bold = bool(bold_val) if bold_val is not None else False
                     align_val = _ALIGN_MAP.get(cfg.get("align", "left"))
                     if align_val is not None:
                         style.paragraph_format.alignment = align_val
@@ -1745,6 +2194,7 @@ class ExportService:
                 "Heading 3": heading3_cfg,
                 "Heading 4": heading4_cfg,
                 "Heading 5": heading5_cfg,
+                "Heading 6": heading6_cfg,
                 "Title":     title_cfg,
                 "Subtitle":  subtitle_cfg,
             }
@@ -1772,20 +2222,26 @@ class ExportService:
                 """按模板槽位强制写入段落和 run 的 Word XML 样式。"""
                 if not cfg:
                     return
-                font_name = self._font_display_name(cfg.get("fontFamily"), default_cjk_font)
-                font_size = float(cfg.get("fontSizePt", default_body_size))
-                font_bold = _to_bool(cfg.get("bold"), False)  # 使用 _to_bool 转换
+                # 支持嵌套 font 对象（如 headingStyles）和扁平结构
+                fnt = cfg.get("font") or {}
+                font_name = self._font_display_name(fnt.get("fontFamily") or cfg.get("fontFamily"), default_cjk_font)
+                font_size = float(fnt.get("fontSizePt") or cfg.get("fontSizePt", default_body_size))
+                font_bold_raw = fnt.get("bold") if fnt.get("bold") is not None else cfg.get("bold")
+                font_bold = _to_bool(font_bold_raw, False)
                 align_cfg = cfg.get("align", "left")
                 align = _ALIGN_MAP.get(align_cfg)
-                _log.info(f"[_force_paragraph_template_style] 段落='{paragraph.text[:20]}...', align_cfg={align_cfg}, align={align}, font={font_name}, size={font_size}, bold={font_bold}")
-                
+                line_height = cfg.get("lineHeight") or default_line_height
+                spacing_before = cfg.get("spacingBeforePt") or layout_cfg.get("defaultParagraphSpacingBeforePt", 0)
+                spacing_after = cfg.get("spacingAfterPt") or layout_cfg.get("defaultParagraphSpacingAfterPt", 0)
+                first_indent = cfg.get("firstLineIndentChars")
+                left_indent_val = cfg.get("leftIndentChars")
+
                 pf = paragraph.paragraph_format
                 if align is not None:
                     pf.alignment = align
-                    _log.info(f"[_force_paragraph_template_style] 已设置对齐: {align}")
-                pf.line_spacing = cfg.get("lineHeight", default_line_height)
-                pf.space_before = Pt(cfg.get("spacingBeforePt", layout_cfg.get("defaultParagraphSpacingBeforePt", 0)))
-                pf.space_after = Pt(cfg.get("spacingAfterPt", layout_cfg.get("defaultParagraphSpacingAfterPt", 0)))
+                pf.line_spacing = line_height
+                pf.space_before = Pt(spacing_before)
+                pf.space_after = Pt(spacing_after)
                 if clear_indent:
                     pf.first_line_indent = Pt(0)
                     pf.left_indent = Pt(0)
@@ -1800,9 +2256,9 @@ class ExportService:
                     if ind is None:
                         ind = OxmlElement("w:ind")
                         pPr.append(ind)
-                    ind.set(qn("w:left"), "0")
+                    ind.set(qn("w:left"), str(int((left_indent_val or 0) * 10)) if left_indent_val else "0")
                     ind.set(qn("w:right"), "0")
-                    ind.set(qn("w:firstLine"), "0")
+                    ind.set(qn("w:firstLine"), str(int((first_indent or 0) * 10)) if first_indent else "0")
                     ind.set(qn("w:hanging"), "0")
 
                 if align is not None:
@@ -1812,6 +2268,7 @@ class ExportService:
                         pPr.append(jc)
                     jc.set(qn("w:val"), cfg.get("align", "left"))
 
+                _ascii_font = english_font_family if use_english_font else font_name
                 for run in paragraph.runs:
                     run.font.size = Pt(font_size)
                     run.font.bold = font_bold
@@ -1820,7 +2277,7 @@ class ExportService:
                     if rPr_run is None:
                         rPr_run = OxmlElement("w:rPr")
                         run._element.insert(0, rPr_run)
-                    set_font_properties(rPr_run, font_name, font_name, font_name, font_bold)
+                    set_font_properties(rPr_run, font_name, _ascii_font, _ascii_font, font_bold)
                     rFonts = rPr_run.find(qn("w:rFonts"))
                     if rFonts is not None:
                         rFonts.set(qn("w:eastAsia"), font_name)
@@ -1979,6 +2436,13 @@ class ExportService:
                     page_font,
                 )
 
+            # ── 6. 添加页眉页脚文字内容 ─────────────────────────────────────────
+            hf_cfg = layout_cfg.get("headerFooter") or {}
+            self._add_header_footer_content(doc, hf_cfg, styles_cfg, default_cjk_font)
+
+            # ── 7. 应用图片样式 ───────────────────────────────────────────────
+            self._apply_docx_image_styles(doc, template_binding)
+
             doc.save(docx_path)
             _log.info(
                 f"docx 已应用模板字体与页面参数，正文中文字体={default_cjk_font}"
@@ -1986,6 +2450,341 @@ class ExportService:
         except Exception as e:
             _log.warning(f"设置 docx 字体失败，跳过此步骤: {e}")
             # 字体设置失败不影响导出，文件已生成
+
+    def _convert_inline_to_anchor(
+        self,
+        graphic,
+        inline,
+        wrap_type: str,
+        horizontal_align: str,
+        spacing: dict,
+        border_cfg: dict,
+    ) -> None:
+        """
+        将 wp:inline 图片转换为 wp:anchor 浮动图片。
+        这是在 Word 中实现文字环绕效果的必要步骤。
+        """
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+
+        # 创建 wp:anchor 元素
+        anchor = OxmlElement("wp:anchor")
+
+        # 复制 inline 中的元素到 anchor
+        for child in list(inline):
+            anchor.append(child)
+
+        # 设置基本属性
+        # distl, distT, distR, distB: 图片与文字的最小距离（EMU 单位，1 cm = 914400 EMU）
+        dist_left_emu = int((spacing.get("marginLeftCm", 0.2) or 0.2) * 914400)
+        dist_right_emu = int((spacing.get("marginRightCm", 0.2) or 0.2) * 914400)
+        dist_top_emu = int((spacing.get("marginTopCm", 0) or 0) * 914400)
+        dist_bottom_emu = int((spacing.get("marginBottomCm", 0.21) or 0.21) * 914400)
+
+        anchor.set("distl", str(dist_left_emu))
+        anchor.set("distT", str(dist_top_emu))
+        anchor.set("distR", str(dist_right_emu))
+        anchor.set("distB", str(dist_bottom_emu))
+
+        # simplePos: 是否使用简单定位
+        anchor.set("simplePos", "0")
+
+        # relativeHeight: Z-index
+        anchor.set("relativeHeight", "251658240")
+
+        # behindDoc: 图片是否在文字下方
+        anchor.set("behindDoc", "0")
+
+        # locked, layoutInCell, allowOverlap: 锁定、单元格内布局、允许重叠
+        anchor.set("locked", "0")
+        anchor.set("layoutInCell", "1")
+        anchor.set("allowOverlap", "1")
+
+        # 添加文档相对位置（相对于页面）
+        docIds = OxmlElement("wp:docIds")
+        docId = OxmlElement("wp:docId")
+        docId.set("val", "1")
+        docIds.append(docId)
+        anchor.append(docIds)
+
+        # 添加简单位置（占位）
+        simplePos = OxmlElement("wp:simplePos")
+        simplePos.set("x", "0")
+        simplePos.set("y", "0")
+        anchor.append(simplePos)
+
+        # 添加水平位置
+        positionH = OxmlElement("wp:positionH")
+        positionH.set("relativeFrom", "margin")
+        alignH = OxmlElement("wp:align")
+        if horizontal_align == "center":
+            alignH.text = "center"
+        elif horizontal_align == "right":
+            alignH.text = "right"
+        else:
+            alignH.text = "left"
+        positionH.append(alignH)
+        anchor.append(positionH)
+
+        # 添加垂直位置
+        positionV = OxmlElement("wp:positionV")
+        positionV.set("relativeFrom", "paragraph")
+        alignV = OxmlElement("wp:align")
+        alignV.text = "top"
+        positionV.append(alignV)
+        anchor.append(positionV)
+
+        # 添加环绕设置
+        wrap = OxmlElement("wp:wrap")
+        wrap_type_map = {
+            "square": "square",
+            "tight": "tight",
+            "through": "through",
+            "topAndBottom": "topAndBottom",
+            "behind": "none",
+            "inFront": "none",
+        }
+        wrap.set("type", wrap_type_map.get(wrap_type, "square"))
+        anchor.append(wrap)
+
+        # 添加效果范围（环绕距离）
+        effectExtent = OxmlElement("wp:effectExtent")
+        effectExtent.set("l", str(dist_left_emu))
+        effectExtent.set("t", str(dist_top_emu))
+        effectExtent.set("r", str(dist_right_emu))
+        effectExtent.set("b", str(dist_bottom_emu))
+        anchor.append(effectExtent)
+
+        # 设置边框
+        if border_cfg.get("showBorder"):
+            docPr = anchor.find(qn("wp:docPr"))
+            if docPr is not None:
+                border_color = border_cfg.get("color", "#000000")
+                border_width = border_cfg.get("borderWidthPt", border_cfg.get("widthPt", 0.75))
+                docPr.set("strokeColor", border_color.lstrip("#"))
+                docPr.set("strokeWeight", f"{border_width}pt")
+
+        # 替换 inline 为 anchor
+        graphic.remove(inline)
+        graphic.append(anchor)
+
+        _log.debug(f"[_convert_inline_to_anchor] 已将内联图片转换为浮动图片，wrap_type={wrap_type}")
+
+    def _apply_docx_image_styles(
+        self,
+        doc,
+        template_binding: Optional[dict[str, Any]],
+    ) -> None:
+        """
+        为 Word 文档中的图片应用模板样式配置。
+
+        支持的配置项：
+        - position.wrapType: inline/square/tight/topAndBottom/behind/inFront
+        - position.horizontalAlign: left/center/right
+        - border.showBorder: 是否显示边框
+        - border.color: 边框颜色
+        - border.widthPt: 边框宽度
+        - spacing: 上下左右边距
+        - sizeMode: maxLimit（最大尺寸限制）
+        - sizeMode.maxWidthCm/maxHeightCm: 最大宽高
+        """
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.shared import Mm, Pt
+
+        image_styles = self._binding_image_styles(template_binding)
+        if not image_styles:
+            _log.debug("无图片样式配置，跳过")
+            return
+
+        _log.info(f"[_apply_docx_image_styles] 应用图片样式: {image_styles}")
+
+        position = image_styles.get("position") or {}
+        border_cfg = image_styles.get("border") or {}
+        spacing = image_styles.get("spacing") or {}
+        wrap_type = position.get("wrapType", "inline")
+        horizontal_align = position.get("horizontalAlign")
+
+        # 遍历文档中的所有图片
+        image_count = 0
+        for rel in doc.part.rels.values():
+            if "image" not in rel.reltype:
+                continue
+            image_count += 1
+
+        # 判断是否需要浮动图片（非 inline 模式需要 wp:anchor）
+        needs_float = wrap_type not in ("inline", "topAndBottom")
+
+        _log.info(f"[_apply_docx_image_styles] 文档中共有 {image_count} 张图片, wrap_type={wrap_type}, needs_float={needs_float}")
+
+        # 处理每张图片
+        for para in doc.paragraphs:
+            for run in para.runs:
+                run_elem = run._element
+                # 查找图片元素
+                graphic = run_elem.find(qn("a:graphic"))
+                if graphic is None:
+                    continue
+
+                # 查找 wp:inline 或 wp:anchor
+                inline = graphic.find(qn("wp:inline"))
+                anchor = graphic.find(qn("wp:anchor"))
+
+                # 设置段落对齐方式（图片默认在段落中）
+                if horizontal_align == "center":
+                    para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    _log.debug("设置图片段落居中对齐")
+                elif horizontal_align == "right":
+                    para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                    _log.debug("设置图片段落右对齐")
+
+                # 处理浮动图片 - 四周型等需要 wp:anchor 格式
+                if needs_float and inline is not None:
+                    # 需要将 wp:inline 转换为 wp:anchor
+                    self._convert_inline_to_anchor(graphic, inline, wrap_type, horizontal_align, spacing, border_cfg)
+                    anchor = graphic.find(qn("wp:anchor"))
+                elif anchor is not None:
+                    self._apply_anchor_styles(anchor, wrap_type, horizontal_align, spacing, border_cfg)
+                elif inline is not None:
+                    self._apply_inline_styles(inline, wrap_type, spacing, border_cfg)
+
+        _log.info(f"[_apply_docx_image_styles] 图片样式应用完成，处理了 {image_count} 张图片")
+
+    def _apply_anchor_styles(
+        self,
+        anchor,
+        wrap_type: str,
+        horizontal_align: str,
+        spacing: dict,
+        border_cfg: dict,
+    ) -> None:
+        """处理浮动图片（wp:anchor）的样式"""
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+
+        # 设置 behindDoc（文字在上/下）
+        behindDoc = anchor.find(qn("wp:behindDoc"))
+        if behindDoc is not None:
+            behindDoc.set("val", "1" if wrap_type == "behind" else "0")
+
+        # 设置相对水平位置
+        positionH = anchor.find(qn("wp:positionH"))
+        if positionH is None:
+            positionH = OxmlElement("wp:positionH")
+            anchor.append(positionH)
+        positionH.set("relativeFrom", "margin")
+
+        posH_elem = positionH.find(qn("wp:align"))
+        if posH_elem is None:
+            posH_elem = OxmlElement("wp:align")
+            positionH.append(posH_elem)
+
+        if horizontal_align == "center":
+            posH_elem.text = "center"
+        elif horizontal_align == "right":
+            posH_elem.text = "right"
+        else:
+            posH_elem.text = "left"
+
+        # 设置垂直位置（使用 paragraph - 相对于当前段落定位）
+        positionV = anchor.find(qn("wp:positionV"))
+        if positionV is None:
+            positionV = OxmlElement("wp:positionV")
+            anchor.append(positionV)
+        positionV.set("relativeFrom", "paragraph")
+
+        posV_elem = positionV.find(qn("wp:align"))
+        if posV_elem is None:
+            posV_elem = OxmlElement("wp:align")
+            positionV.append(posV_elem)
+        posV_elem.text = "top"
+
+        # 设置环绕方式
+        wrap = anchor.find(qn("wp:wrap"))
+        if wrap is None:
+            wrap = OxmlElement("wp:wrap")
+            anchor.append(wrap)
+
+        wrap_type_map = {
+            "square": "square",
+            "tight": "tight",
+            "through": "through",
+            "topAndBottom": "topAndBottom",
+            "behind": "none",
+            "inFront": "none",
+            "inline": "inline",
+        }
+        wrap.set("type", wrap_type_map.get(wrap_type, "inline"))
+
+        # 设置环绕距离（文字与图片之间的距离）
+        # 在 Word 中，distl/distT/distR/distB 定义图片与文字的最小距离（EMU）
+        # 1 cm = 914400 EMU
+        dist_left_emu = int((spacing.get("marginLeftCm", 0.2) or 0.2) * 914400)
+        dist_right_emu = int((spacing.get("marginRightCm", 0.2) or 0.2) * 914400)
+        dist_top_emu = int((spacing.get("marginTopCm", 0) or 0) * 914400)
+        dist_bottom_emu = int((spacing.get("marginBottomCm", 0.21) or 0.21) * 914400)
+
+        anchor.set("distl", str(dist_left_emu))
+        anchor.set("distT", str(dist_top_emu))
+        anchor.set("distR", str(dist_right_emu))
+        anchor.set("distB", str(dist_bottom_emu))
+
+        # effectExtent: 定义文字绕排时图片周围的空间范围
+        # 对于四周型，这个值应该足够大以确保文字不会紧贴图片
+        effectExtent = anchor.find(qn("wp:effectExtent"))
+        if effectExtent is None:
+            effectExtent = OxmlElement("wp:effectExtent")
+            anchor.append(effectExtent)
+
+        # effectExtent 应该包含图片尺寸 + 边距，这里使用合理的默认值
+        extent = anchor.find(qn("wp:extent"))
+        cx = 0
+        cy = 0
+        if extent is not None:
+            cx = int(extent.get("cx", "0"))
+            cy = int(extent.get("cy", "0"))
+
+        # 添加边距到 effectExtent
+        effectExtent.set("l", str(dist_left_emu))
+        effectExtent.set("r", str(dist_right_emu))
+        effectExtent.set("t", str(dist_top_emu))
+        effectExtent.set("b", str(dist_bottom_emu))
+
+        # 设置简单的边框效果（通过 docPr）
+        docPr = anchor.find(qn("wp:docPr"))
+        if docPr is not None and border_cfg.get("showBorder"):
+            border_color = border_cfg.get("color", "#000000")
+            border_width = border_cfg.get("borderWidthPt", border_cfg.get("widthPt", 0.75))
+            # borderColor 是 SVG 颜色格式
+            docPr.set("strokeColor", border_color.lstrip("#"))
+            docPr.set("strokeWeight", f"{border_width}pt")
+
+        _log.debug(f"[_apply_anchor_styles] wrap_type={wrap_type}, horizontal_align={horizontal_align}, spacing={spacing}")
+
+    def _apply_inline_styles(
+        self,
+        inline,
+        wrap_type: str,
+        spacing: dict,
+        border_cfg: dict,
+    ) -> None:
+        """处理内联图片（wp:inline）的样式"""
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+
+        # 内联图片的对齐通过段落的 alignment 属性控制
+        # 这里可以添加边框处理（通过 graphicFramePr）
+
+        # 设置图片间距（通过 extent 的 margin 实现）
+        extent = inline.find(qn("wp:extent"))
+        if extent is not None:
+            cx = extent.get("cx")
+            cy = extent.get("cy")
+            if cx and cy:
+                _log.debug(f"[_apply_inline_styles] 图片尺寸: cx={cx}, cy={cy}")
+
+        _log.debug(f"[_apply_inline_styles] spacing={spacing}")
 
     def _add_page_number_footer(
         self,
@@ -2120,6 +2919,144 @@ class ExportService:
             except Exception as e:
                 _log.warning(f"添加页脚页码失败: {e}")
                 continue
+
+
+    def _add_header_footer_content(
+        self,
+        doc,
+        hf_cfg: dict[str, Any],
+        styles_cfg: dict[str, Any],
+        default_font: str,
+    ) -> None:
+        """
+        为 Word 文档添加页眉/页脚文字内容。
+        处理首页不同、奇偶页不同的配置。
+        """
+        from docx.oxml import OxmlElement
+        from docx.oxml.ns import qn
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.shared import Pt
+
+        _ALIGN_MAP = {
+            "left": WD_ALIGN_PARAGRAPH.LEFT,
+            "center": WD_ALIGN_PARAGRAPH.CENTER,
+            "right": WD_ALIGN_PARAGRAPH.RIGHT,
+            "justify": WD_ALIGN_PARAGRAPH.JUSTIFY,
+        }
+
+        page_num_style = styles_cfg.get("page_number") or {}
+        font_name = self._font_display_name(
+            hf_cfg.get("pageNumberFontFamily") or page_num_style.get("fontFamily"),
+            default_font,
+        )
+        font_size_pt = float(hf_cfg.get("pageNumberFontSizePt") or page_num_style.get("fontSizePt") or 10)
+        font_color = hf_cfg.get("pageNumberColor") or page_num_style.get("color") or "#000000"
+        font_bold = hf_cfg.get("pageNumberBold") or page_num_style.get("bold") or False
+        font_italic = hf_cfg.get("pageNumberItalic") or page_num_style.get("italic") or False
+
+        def _make_rPr(align: str) -> OxmlElement:
+            rPr = OxmlElement("w:rPr")
+            rFonts = OxmlElement("w:rFonts")
+            rFonts.set(qn("w:eastAsia"), font_name)
+            rFonts.set(qn("w:ascii"), font_name)
+            rFonts.set(qn("w:hAnsi"), font_name)
+            rFonts.set(qn("w:cs"), font_name)
+            rPr.append(rFonts)
+            sz = OxmlElement("w:sz")
+            sz.set(qn("w:val"), str(int(font_size_pt * 2)))
+            rPr.append(sz)
+            szCs = OxmlElement("w:szCs")
+            szCs.set(qn("w:val"), str(int(font_size_pt * 2)))
+            rPr.append(szCs)
+            if font_color:
+                clr = OxmlElement("w:color")
+                clr.set(qn("w:val"), font_color.lstrip("#"))
+                rPr.append(clr)
+            if font_bold:
+                b = OxmlElement("w:b")
+                rPr.append(b)
+            if font_italic:
+                i = OxmlElement("w:i")
+                rPr.append(i)
+            return rPr
+
+        def _add_tab_para(container, content: dict, align: str):
+            """在 header/footer 容器中添加带定位的段落，左/中/右三列文字"""
+            para = container.add_paragraph()
+            para.alignment = _ALIGN_MAP.get(align, WD_ALIGN_PARAGRAPH.CENTER)
+
+            left = content.get("left", "")
+            center = content.get("center", "")
+            right = content.get("right", "")
+
+            if not (left or center or right):
+                return
+
+            pPr = para._element.find(qn("w:pPr"))
+            if pPr is None:
+                pPr = OxmlElement("w:pPr")
+                para._element.insert(0, pPr)
+            tabs = OxmlElement("w:tabs")
+            tab_defs = [
+                (WD_ALIGN_PARAGRAPH.CENTER, 4680),
+                (WD_ALIGN_PARAGRAPH.RIGHT, 9360),
+            ]
+            for tab_align, pos in tab_defs:
+                tab = OxmlElement("w:tab")
+                tab.set(qn("w:val"), tab_align)
+                tab.set(qn("w:pos"), str(pos))
+                tabs.append(tab)
+            pPr.append(tabs)
+
+            run = para.add_run()
+            run.text = left + ("\t" if (left and (center or right)) else "")
+            run._r.insert(0, _make_rPr(align))
+
+            if center or right:
+                run2 = para.add_run()
+                run2.text = (center or "") + ("\t" if (center and right) else "")
+                run2._r.insert(0, _make_rPr(align))
+
+            if right:
+                run3 = para.add_run()
+                run3.text = right
+                run3._r.insert(0, _make_rPr(align))
+
+        def _fill_header_footer(section, target: str):
+            """为目标（header/footer）添加内容"""
+            container = section.header if target == "header" else section.footer
+            container.is_linked_to_previous = False
+
+            for para in list(container.paragraphs):
+                p = para._element
+                p.getparent().remove(p)
+
+            if target == "header":
+                content = hf_cfg.get("headerContent") or {}
+            else:
+                content = hf_cfg.get("footerContent") or {}
+
+            if not (content.get("left") or content.get("center") or content.get("right")):
+                return
+
+            _add_tab_para(container, content, "center")
+
+        # 处理首页不同和奇偶页不同的 section 属性
+        for section in doc.sections:
+            section.footer_distance = Pt(20)
+            section.header_distance = Pt(20)
+            if hf_cfg.get("differentFirstPage"):
+                section.different_first_page_header_footer = True
+            if hf_cfg.get("differentOddEven"):
+                section.even_odd_headers_footers = True
+
+        if hf_cfg.get("hasHeader"):
+            for section in doc.sections:
+                _fill_header_footer(section, "header")
+
+        if hf_cfg.get("hasFooter"):
+            for section in doc.sections:
+                _fill_header_footer(section, "footer")
 
 
 # 全局单例

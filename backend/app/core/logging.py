@@ -42,23 +42,31 @@ def setup_logging(level: str = "INFO", format_type: str = "simple") -> None:
         level: 日志级别，默认 INFO
         format_type: 格式类型，"simple" 或 "json"
     """
-    logger.remove()
+    # 移除所有现有的 handler（包括之前添加的）
+    logger.remove(handler_id=None)
 
+    # 日志格式
     if format_type == "json":
         # JSON Lines 格式，便于日志收集和分析
-        logger.add(
-            sys.stderr,
-            format="{message}",
-            level=level,
-            serialize=True,
-        )
+        log_format = "{message}"
+        serialize = True
     else:
         # 简单格式，便于开发调试
-        logger.add(
-            sys.stderr,
-            format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | <level>{message}</level>",
-            level=level,
-        )
+        log_format = "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | <level>{message}</level>"
+        serialize = False
+
+    # 添加 stdout handler
+    # enqueue=False: 直接输出，不使用队列（uvicorn reload 模式下更可靠）
+    # catch=False: 不要捕获异常，让异常传播
+    logger.add(
+        sys.stdout,
+        format=log_format,
+        level=level,
+        serialize=serialize,
+        enqueue=False,
+        catch=False,
+        colorize=True,
+    )
 
 
 def set_request_context(

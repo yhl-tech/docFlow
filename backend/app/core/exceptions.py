@@ -123,9 +123,19 @@ def register_exception_handlers(app: FastAPI) -> None:
             f"参数校验失败: {msg}",
             extra={"validation_errors": errors}
         )
+        # 确保所有错误信息都是 JSON 可序列化的
+        def make_serializable(obj):
+            if isinstance(obj, dict):
+                return {k: make_serializable(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple)):
+                return [make_serializable(item) for item in obj]
+            elif isinstance(obj, (str, int, float, bool, type(None))):
+                return obj
+            else:
+                return str(obj)
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content={"error": msg, "code": "VALIDATION_ERROR", "detail": errors},
+            content={"error": msg, "code": "VALIDATION_ERROR", "detail": make_serializable(errors)},
         )
 
     @app.exception_handler(Exception)
@@ -134,7 +144,9 @@ def register_exception_handlers(app: FastAPI) -> None:
             f"未处理异常: {type(exc).__name__}",
             extra={"exception_type": type(exc).__name__}
         )
+        # 确保错误信息可序列化
+        error_msg = str(exc) if not isinstance(exc, (dict, list)) else "未知错误"
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"error": "服务器内部错误", "code": "INTERNAL_ERROR", "detail": None},
+            content={"error": error_msg, "code": "INTERNAL_ERROR", "detail": None},
         )

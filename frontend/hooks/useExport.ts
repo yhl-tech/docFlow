@@ -39,7 +39,6 @@ export interface UseExportReturn {
 // 常量
 // ============================================================
 
-const CONTENT_MAX_LENGTH = 50_000
 const FILE_EXT: Record<ExportFormat, string> = {
   docx:  'docx',
   pdf:   'pdf',
@@ -111,10 +110,6 @@ export function useExport(options: UseExportOptions = {}): UseExportReturn {
       toast.error('请先输入或粘贴 Markdown 内容')
       return false
     }
-    if (content.length > CONTENT_MAX_LENGTH) {
-      toast.error(`内容过长，请控制在 ${CONTENT_MAX_LENGTH / 1000} 万字符以内`)
-      return false
-    }
     return true
   }, [content])
 
@@ -159,9 +154,15 @@ export function useExport(options: UseExportOptions = {}): UseExportReturn {
         effectiveBindingSnapshot: effectiveTemplateBinding?.configSnapshot?.styles,
         heading_1_bold_preview: previewConfig?.styles?.heading_1?.bold,
         heading_1_bold_binding: effectiveTemplateBinding?.configSnapshot?.styles?.heading_1?.bold,
+        // 图片样式调试
+        imageStyles_preview: previewConfig?.imageStyles,
+        imageStyles_binding: effectiveTemplateBinding?.configSnapshot?.imageStyles,
+        // 完整配置快照（用于调试）
+        fullPreviewConfig: previewConfig,
+        fullBindingSnapshot: effectiveTemplateBinding?.configSnapshot,
       })
 
-      // 调试：打印完整的 API 请求 payload
+      // Base64 图片保留在 markdown 中，由后端处理
       const apiPayload = {
         markdown: content,
         template: templateId,

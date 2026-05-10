@@ -1,0 +1,47 @@
+/* ─── 对话区样式 ─── */
+
+/* 对话区 Markdown 浅色主题 */
+.chat-prose pre {
+  background: #f8fafc;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+}
+.chat-prose code {
+  color: #6366f1;
+  background: #eef2ff;
+}
+.chat-prose code::before,
+.chat-prose code::after {
+  content: none;
+}
+.chat-prose strong {
+  color: #1e293b;
+}
+.chat-prose a {
+  color: #4f46e5;
+}
+.chat-prose blockquote {
+  border-color: #6366f1;
+  color: #64748b;
+}
+
+/* Mermaid 图表容器 */
+.mermaid-container {
+  display: flex;
+  justify-content: center;
+  padding: 1rem 0;
+  overflow-x: auto;
+}
+
+/* Markdown 预览区样式 */
+.markdown-preview {
+  @apply prose prose-slate max-w-none;
+}
+
+.markdown-preview pre {
+  @apply bg-slate-900 rounded-lg overflow-x-auto;
+}
+
+.markdown-preview code {
+  @apply font-mono text-sm;
+}

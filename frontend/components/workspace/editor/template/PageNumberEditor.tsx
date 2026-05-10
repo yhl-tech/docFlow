@@ -2,6 +2,7 @@
 
 import type { PageNumberConfig } from '@/types/editor-template'
 import { ColorPicker } from './StyleSlotRow'
+import { Switch } from '@/components/ui/Switch'
 
 interface PageNumberEditorProps {
   pageNumber: PageNumberConfig | undefined
@@ -36,19 +37,11 @@ export function PageNumberEditor({ pageNumber, onChange, disabled }: PageNumberE
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <label className="text-xs font-medium text-slate-600">启用页码</label>
-        <button
-          onClick={() => onChange({ enabled: !config.enabled })}
+        <Switch
+          checked={config.enabled ?? false}
+          onChange={(v) => onChange({ enabled: v })}
           disabled={disabled}
-          className={`relative h-5 w-9 rounded-full transition-colors ${
-            config.enabled ? 'bg-slate-700' : 'bg-slate-200'
-          } disabled:opacity-50`}
-        >
-          <span
-            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
-              config.enabled ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
+        />
       </div>
 
       {config.enabled && (
@@ -157,6 +150,56 @@ export function PageNumberEditor({ pageNumber, onChange, disabled }: PageNumberE
               />
               续前节
             </label>
+          </div>
+
+          {/* 章节设置 */}
+          <div className="space-y-2 rounded border border-slate-100 bg-slate-50 p-3">
+            <p className="text-xs font-medium text-slate-600">章节设置</p>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={config.includeChapterNumber ?? false}
+                  onChange={(e) => onChange({ includeChapterNumber: e.target.checked })}
+                  disabled={disabled}
+                  className="rounded border-slate-300"
+                />
+                包含章节编号
+              </label>
+            </div>
+            {config.includeChapterNumber && (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">章节样式</label>
+                  <select
+                    value={config.chapterStyle ?? 'heading1'}
+                    onChange={(e) => onChange({ chapterStyle: e.target.value as PageNumberConfig['chapterStyle'] })}
+                    disabled={disabled}
+                    className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-300 disabled:opacity-50"
+                  >
+                    <option value="heading1">标题 1</option>
+                    <option value="heading2">标题 2</option>
+                    <option value="heading3">标题 3</option>
+                    <option value="body">正文</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-slate-400">章节分隔符</label>
+                  <select
+                    value={config.chapterSeparator ?? '-'}
+                    onChange={(e) => onChange({ chapterSeparator: e.target.value as PageNumberConfig['chapterSeparator'] })}
+                    disabled={disabled}
+                    className="w-full rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-300 disabled:opacity-50"
+                  >
+                    <option value="-">-（短横线）</option>
+                    <option value=".">.（点）</option>
+                    <option value="--">--（双横线）</option>
+                    <option value=":">:（冒号）</option>
+                    <option value="()">()（括号）</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}
