@@ -228,7 +228,7 @@ export function generateImageStylesCSS(imageStyles: ImageStyleConfig | undefined
   }
 
   // 边框
-  const borderWidthPt = border.borderWidthPt ?? position.borderWidthPt
+  const borderWidthPt = border.widthPt ?? position.borderWidthPt
   const borderColor = border.color ?? position.borderColor
   if (border.showBorder || borderWidthPt) {
     cssRules.push(

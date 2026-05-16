@@ -5,10 +5,10 @@ import { createPortal } from "react-dom"
 import { useEditor, EditorContent, type Editor } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
 import Underline from "@tiptap/extension-underline"
-import { Table } from "@tiptap/extension-table"
+import CustomTable from "./extensions/CustomTable"
+import CustomTableCell from "./extensions/CustomTableCell"
+import CustomTableHeader from "./extensions/CustomTableHeader"
 import TableRow from "@tiptap/extension-table-row"
-import TableHeader from "@tiptap/extension-table-header"
-import TableCell from "@tiptap/extension-table-cell"
 import Placeholder from "@tiptap/extension-placeholder"
 import { Markdown } from "tiptap-markdown"
 import { toast } from "sonner"
@@ -60,6 +60,7 @@ function buildTemplateStyle(
   config: import("@/types/editor-template").TemplateConfig | null,
 ): React.CSSProperties {
   // 当 config 为 null 时，使用默认 CSS 变量
+  // 注意：CSS border-width 不支持 pt 单位，使用 px（0.5pt ≈ 1px）
   if (!config) {
     return {
       "--tpl-title-size": "1.5rem",
@@ -73,9 +74,14 @@ function buildTemplateStyle(
       "--tpl-h5-align": "left",
       "--tpl-body-weight": "400",
       "--tpl-body-align": "left",
+      // 表格默认边框宽度（px，不是 pt）
+      "--tpl-table-border-width": "1px",
+      "--tpl-table-border-width-inner": "1px",
+      // 表格默认背景色
+      "--tpl-table-row-bg": "transparent",
     } as React.CSSProperties
   }
-  const { styles, layout, headingStyles, paragraphStyles, imageStyles } = config
+  const { styles, layout, headingStyles, paragraphStyles, imageStyles, tableStyles, listStyles, codeBlockStyles } = config
   const body = styles?.body ?? {}
   const h1 = styles?.heading_1 ?? {}
   const h2 = styles?.heading_2 ?? {}
@@ -148,22 +154,37 @@ function buildTemplateStyle(
     "--tpl-h1-size": h1Effective.fontSizePt ? `${h1Effective.fontSizePt}pt` : undefined,
     "--tpl-h1-weight": h1Effective.bold ? "700" : "400",
     "--tpl-h1-align": headingStyles?.h1?.align ?? h1Effective.align ?? "left",
+    "--tpl-h1-line-height": headingStyles?.h1?.lineHeight?.toString() ?? undefined,
+    "--tpl-h1-space-before": headingStyles?.h1?.spacingBeforePt ? `${headingStyles.h1.spacingBeforePt}pt` : undefined,
+    "--tpl-h1-space-after": headingStyles?.h1?.spacingAfterPt ? `${headingStyles.h1.spacingAfterPt}pt` : undefined,
     "--tpl-h2-font": fontVar(h2Effective.fontFamily) ?? "inherit",
     "--tpl-h2-size": h2Effective.fontSizePt ? `${h2Effective.fontSizePt}pt` : undefined,
     "--tpl-h2-weight": h2Effective.bold ? "700" : "400",
     "--tpl-h2-align": headingStyles?.h2?.align ?? h2Effective.align ?? "left",
+    "--tpl-h2-line-height": headingStyles?.h2?.lineHeight?.toString() ?? undefined,
+    "--tpl-h2-space-before": headingStyles?.h2?.spacingBeforePt ? `${headingStyles.h2.spacingBeforePt}pt` : undefined,
+    "--tpl-h2-space-after": headingStyles?.h2?.spacingAfterPt ? `${headingStyles.h2.spacingAfterPt}pt` : undefined,
     "--tpl-h3-font": fontVar(h3Effective.fontFamily) ?? "inherit",
     "--tpl-h3-size": h3Effective.fontSizePt ? `${h3Effective.fontSizePt}pt` : undefined,
     "--tpl-h3-weight": h3Effective.bold ? "700" : "400",
     "--tpl-h3-align": headingStyles?.h3?.align ?? h3Effective.align ?? "left",
+    "--tpl-h3-line-height": headingStyles?.h3?.lineHeight?.toString() ?? undefined,
+    "--tpl-h3-space-before": headingStyles?.h3?.spacingBeforePt ? `${headingStyles.h3.spacingBeforePt}pt` : undefined,
+    "--tpl-h3-space-after": headingStyles?.h3?.spacingAfterPt ? `${headingStyles.h3.spacingAfterPt}pt` : undefined,
     "--tpl-h4-font": fontVar(h4Effective.fontFamily) ?? "inherit",
     "--tpl-h4-size": h4Effective.fontSizePt ? `${h4Effective.fontSizePt}pt` : undefined,
     "--tpl-h4-weight": h4Effective.bold ? "700" : "400",
     "--tpl-h4-align": headingStyles?.h4?.align ?? h4Effective.align ?? "left",
+    "--tpl-h4-line-height": headingStyles?.h4?.lineHeight?.toString() ?? undefined,
+    "--tpl-h4-space-before": headingStyles?.h4?.spacingBeforePt ? `${headingStyles.h4.spacingBeforePt}pt` : undefined,
+    "--tpl-h4-space-after": headingStyles?.h4?.spacingAfterPt ? `${headingStyles.h4.spacingAfterPt}pt` : undefined,
     "--tpl-h5-font": fontVar(h5Effective.fontFamily) ?? "inherit",
     "--tpl-h5-size": h5Effective.fontSizePt ? `${h5Effective.fontSizePt}pt` : undefined,
     "--tpl-h5-weight": h5Effective.bold ? "700" : "400",
     "--tpl-h5-align": headingStyles?.h5?.align ?? h5Effective.align ?? "left",
+    "--tpl-h5-line-height": headingStyles?.h5?.lineHeight?.toString() ?? undefined,
+    "--tpl-h5-space-before": headingStyles?.h5?.spacingBeforePt ? `${headingStyles.h5.spacingBeforePt}pt` : undefined,
+    "--tpl-h5-space-after": headingStyles?.h5?.spacingAfterPt ? `${headingStyles.h5.spacingAfterPt}pt` : undefined,
     "--tpl-margin": layout
       ? `${layout.marginTopMm ?? 25}mm ${layout.marginRightMm ?? 20}mm ${layout.marginBottomMm ?? 25}mm ${layout.marginLeftMm ?? 20}mm`
       : undefined,
@@ -176,7 +197,7 @@ function buildTemplateStyle(
     "--tpl-img-margin-right": imageStyles?.spacing?.marginRightCm ? `${imageStyles.spacing.marginRightCm}cm` : '0',
     // 边框：优先从 border 读取，兼容 position.borderWidthPt
     "--tpl-img-border": (imageStyles?.border?.showBorder || imageStyles?.position?.borderWidthPt)
-      ? `${imageStyles?.border?.borderWidthPt ?? imageStyles?.position?.borderWidthPt ?? 5}pt solid ${imageStyles?.border?.color ?? imageStyles?.position?.borderColor ?? '#000000'}`
+      ? `${imageStyles?.border?.widthPt ?? imageStyles?.position?.borderWidthPt ?? 5}pt solid ${imageStyles?.border?.color ?? imageStyles?.position?.borderColor ?? '#000000'}`
       : 'none',
     // 图片效果：亮度、对比度
     "--tpl-img-filter": (() => {
@@ -192,7 +213,176 @@ function buildTemplateStyle(
     "--tpl-img-max-height": imageStyles?.position?.maxHeightCm ? `${imageStyles.position.maxHeightCm}cm` : undefined,
     // 图片行间距
     "--tpl-img-line-spacing": imageStyles?.lineSpacing ? `${imageStyles.lineSpacing}` : undefined,
-  } as React.CSSProperties
+    // 图片颜色重置（灰度/冲淡/棕褐色）— CSS filter 实现预览效果
+    "--tpl-img-recolor": (() => {
+      const recolor = imageStyles?.style?.recolor
+      if (!recolor || recolor.preset === 'none' || recolor.preset === undefined) return 'none'
+      if (recolor.preset === 'grayscale') return 'grayscale(100%)'
+      if (recolor.preset === 'washout') return 'opacity(0.4) brightness(1.5)'
+      if (recolor.preset === 'sepia') return 'sepia(100%)'
+      return 'none'
+    })(),
+    // 图片文字环绕距离（distanceMm）— CSS margin 预览
+    "--tpl-img-wrap-distance": imageStyles?.textWrap?.distanceMm
+      ? `${imageStyles.textWrap.distanceMm}mm` : '0',
+
+    // 表格样式变量 — 必须写成 var() 字符串，才能让 CSS 规则中的 var() 正确引用
+    // 直接写 computed 值（如 #000000）会使 CSS var() 引用失效
+    // 注意：CSS border-width 不支持 pt 单位，需要转换为 px（1pt = 1.333px）
+    "--tpl-table-align": tableStyles?.tableAlignment ?? 'left',
+    "--tpl-table-width": tableStyles?.tableWidth ? `${tableStyles.tableWidth}%` : '100%',
+    // 表格对齐 margin（直接计算，而不是依赖 CSS 规则匹配类名）
+    "--tpl-table-ml": tableStyles?.tableAlignment === 'center' ? 'auto' : tableStyles?.tableAlignment === 'right' ? 'auto' : '0',
+    "--tpl-table-mr": tableStyles?.tableAlignment === 'center' ? 'auto' : tableStyles?.tableAlignment === 'right' ? '0' : 'auto',
+    // 表格边框（根据 preset 计算各边显隐）
+    ...((() => {
+      const border = tableStyles?.border
+      const widthPx = border?.widthPt ? `${Math.round(border.widthPt * 1.333)}px` : '1px'
+      const color = border?.color ?? '#000000'
+      const style = border?.style === 'single' ? 'solid' : (border?.style ?? 'solid')
+      const preset = border?.preset ?? 'all'
+      const outerW = preset === 'none' ? '0px' : widthPx
+      const innerW = (preset === 'none' || preset === 'outline') ? '0px' : widthPx
+      return {
+        "--tpl-table-border-color-inner": color,
+        "--tpl-table-border-color": color,
+        "--tpl-table-border-width-inner": innerW,
+        "--tpl-table-border-width": innerW,
+        "--tpl-table-border-outer-width": outerW,
+        "--tpl-table-border-style": style,
+      }
+    })()),
+    // 表格底纹
+    // 表格底纹：applyTo="table" 时设整表背景，否则设单元格背景
+    "--tpl-table-shading": tableStyles?.shading?.applyTo === 'table'
+      ? (tableStyles.shading?.fill ?? 'transparent')
+      : 'transparent',
+    "--tpl-table-cell-shading": tableStyles?.shading?.applyTo !== 'table'
+      ? (tableStyles?.shading?.fill ?? 'transparent')
+      : 'transparent',
+    // 表头底纹
+    "--tpl-table-header-bg": tableStyles?.headerStyle?.shading?.fill ?? '#f0f0f0',
+    "--tpl-table-header-bg-inner": tableStyles?.headerStyle?.shading?.fill ?? '#f0f0f0',
+    // 全局字体回退（dataRowStyle 无字体时使用）
+    "--tpl-table-global-font-family": tableStyles?.font?.fontFamily ?? 'inherit',
+    "--tpl-table-global-font-size": tableStyles?.font?.fontSizePt ? `${tableStyles.font.fontSizePt}pt` : 'inherit',
+    // 单元格内边距
+    "--tpl-table-cell-padding": tableStyles?.cellPadding
+      ? `var(--tpl-table-cell-pad-top, ${tableStyles.cellPadding.top ?? 0.14}cm) var(--tpl-table-cell-pad-right, ${tableStyles.cellPadding.right ?? 0}cm) var(--tpl-table-cell-pad-bottom, ${tableStyles.cellPadding.bottom ?? 0.14}cm) var(--tpl-table-cell-pad-left, ${tableStyles.cellPadding.left ?? 0}cm)`
+      : 'var(--tpl-table-cell-pad-top, 0.14cm) var(--tpl-table-cell-pad-right, 0cm) var(--tpl-table-cell-pad-bottom, 0.14cm) var(--tpl-table-cell-pad-left, 0cm)',
+    "--tpl-table-cell-pad-top": tableStyles?.cellPadding ? `${tableStyles.cellPadding.top ?? 0.14}cm` : '0.14cm',
+    "--tpl-table-cell-pad-right": tableStyles?.cellPadding ? `${tableStyles.cellPadding.right ?? 0}cm` : '0cm',
+    "--tpl-table-cell-pad-bottom": tableStyles?.cellPadding ? `${tableStyles.cellPadding.bottom ?? 0.14}cm` : '0.14cm',
+    "--tpl-table-cell-pad-left": tableStyles?.cellPadding ? `${tableStyles.cellPadding.left ?? 0}cm` : '0cm',
+    // 数据行字体样式
+    "--tpl-table-font-family": tableStyles?.dataRowStyle?.font?.fontFamily ?? 'inherit',
+    "--tpl-table-font-size": tableStyles?.dataRowStyle?.font?.fontSizePt
+      ? `${tableStyles.dataRowStyle.font.fontSizePt}pt`
+      : 'inherit',
+    "--tpl-table-color": tableStyles?.dataRowStyle?.font?.color ?? 'inherit',
+    "--tpl-table-font-italic": tableStyles?.dataRowStyle?.font?.italic ? 'italic' : 'inherit',
+    "--tpl-table-font-bold": tableStyles?.dataRowStyle?.font?.bold ? '700' : 'inherit',
+    "--tpl-table-text-decoration": tableStyles?.dataRowStyle?.font?.underline ? 'underline' : 'inherit',
+    // 数据行底纹、对齐、行高
+    "--tpl-table-row-bg": tableStyles?.dataRowStyle?.shading?.fill ?? 'transparent',
+    "--tpl-table-td-align": tableStyles?.dataRowStyle?.align ?? 'left',
+    "--tpl-table-td-valign": tableStyles?.dataRowStyle?.valign ?? 'middle',
+    "--tpl-table-line-height": tableStyles?.dataRowStyle?.lineHeight ?? 1.5,
+    // 表头字体样式
+    "--tpl-table-th-font-family": tableStyles?.headerStyle?.font?.fontFamily ?? 'inherit',
+    "--tpl-table-th-font-size": tableStyles?.headerStyle?.font?.fontSizePt
+      ? `${tableStyles.headerStyle.font.fontSizePt}pt`
+      : 'inherit',
+    "--tpl-table-th-color": tableStyles?.headerStyle?.font?.color ?? 'inherit',
+    "--tpl-table-th-font-bold": tableStyles?.headerStyle?.font?.bold === true ? '700' : 'inherit',
+    "--tpl-table-th-font-italic": tableStyles?.headerStyle?.font?.italic ? 'italic' : 'inherit',
+    "--tpl-table-th-text-decoration": tableStyles?.headerStyle?.font?.underline ? 'underline' : 'inherit',
+    // 表头对齐和行高
+    "--tpl-table-th-align": tableStyles?.headerStyle?.align ?? 'left',
+    "--tpl-table-th-valign": tableStyles?.headerStyle?.valign ?? 'middle',
+    "--tpl-table-th-line-height": tableStyles?.headerStyle?.lineHeight ?? 'inherit',
+    // 表格行高预览（CSS min-height 实现）
+    "--tpl-table-header-min-height": tableStyles?.rowHeight?.headerHeightCm
+      ? `${tableStyles.rowHeight.headerHeightCm}cm` : undefined,
+    "--tpl-table-row-min-height": tableStyles?.rowHeight?.dataRowHeightCm
+      ? `${tableStyles.rowHeight.dataRowHeightCm}cm` : undefined,
+
+    // 无序列表样式
+    "--tpl-ul-marker": listStyles?.bullet?.character ?? '●',
+    "--tpl-ul-marker-color": listStyles?.bullet?.color ?? 'inherit',
+    "--tpl-ul-marker-font": fontVar(listStyles?.bullet?.fontFamily) ?? 'inherit',
+    "--tpl-ul-indent": listStyles?.bullet?.indentCm ? `${listStyles.bullet.indentCm}cm` : '1.5em',
+    "--tpl-ul-space-before": listStyles?.bullet?.spacingBeforeLines ? `${listStyles.bullet.spacingBeforeLines}em` : '0',
+    "--tpl-ul-space-after": listStyles?.bullet?.spacingAfterLines ? `${listStyles.bullet.spacingAfterLines}em` : '0',
+    "--tpl-ul-line-height": listStyles?.bullet?.lineSpacing?.toString() ?? 'inherit',
+
+    // 有序列表样式
+    "--tpl-ol-marker-color": listStyles?.ordered?.color ?? 'inherit',
+    "--tpl-ol-marker-font": fontVar(listStyles?.ordered?.fontFamily) ?? 'inherit',
+    "--tpl-ol-indent": listStyles?.ordered?.indentCm ? `${listStyles.ordered.indentCm}cm` : '1.5em',
+    "--tpl-ol-space-before": listStyles?.ordered?.spacingBeforeLines ? `${listStyles.ordered.spacingBeforeLines}em` : '0',
+    "--tpl-ol-space-after": listStyles?.ordered?.spacingAfterLines ? `${listStyles.ordered.spacingAfterLines}em` : '0',
+    "--tpl-ol-line-height": listStyles?.ordered?.lineSpacing?.toString() ?? 'inherit',
+
+    // 代码块（pre）样式
+    "--tpl-code-font": fontVar(codeBlockStyles?.font?.fontFamily) ?? '"JetBrains Mono", "Fira Code", Consolas, monospace',
+    "--tpl-code-size": codeBlockStyles?.font?.fontSizePt ? `${codeBlockStyles.font.fontSizePt}pt` : '0.8125rem',
+    "--tpl-code-color": codeBlockStyles?.font?.color ?? '#e2e8f0',
+    "--tpl-code-bg": codeBlockStyles?.shading?.fill ?? '#1e293b',
+    "--tpl-code-line-height": codeBlockStyles?.lineSpacing?.toString() ?? '1.65',
+    "--tpl-code-border": (() => {
+      const b = codeBlockStyles?.border
+      if (!b || !b.color) return 'none'
+      const w = b.widthPt ? `${Math.round(b.widthPt * 1.333)}px` : '1px'
+      return `${w} solid ${b.color}`
+    })(),
+    // 代码块内边距：统一使用 pt 单位（默认 12pt ≈ 1rem，16pt ≈ 1.25rem）
+    "--tpl-code-padding-top": codeBlockStyles?.padding?.topPt ? `${codeBlockStyles.padding.topPt}pt` : '12pt',
+    "--tpl-code-padding-bottom": codeBlockStyles?.padding?.bottomPt ? `${codeBlockStyles.padding.bottomPt}pt` : '12pt',
+    "--tpl-code-padding-left": codeBlockStyles?.padding?.leftPt ? `${codeBlockStyles.padding.leftPt}pt` : '16pt',
+    "--tpl-code-padding-right": codeBlockStyles?.padding?.rightPt ? `${codeBlockStyles.padding.rightPt}pt` : '16pt',
+    // 代码块对齐
+    "--tpl-code-align": codeBlockStyles?.alignment ?? 'left',
+    // 代码块内联键盘样式（kbd 元素，编辑器中用 CSS 变量高亮显示）
+    "--tpl-code-keyboard-color": codeBlockStyles?.keyboardStyle?.foregroundColor ?? 'inherit',
+    "--tpl-code-keyboard-bg": codeBlockStyles?.keyboardStyle?.backgroundColor ?? 'inherit',
+    // 代码块行号显示
+    "--tpl-code-line-number-show": codeBlockStyles?.lineNumber?.show ? 'block' : 'none',
+    "--tpl-code-line-number-color": codeBlockStyles?.lineNumber?.color ?? '#888888',
+    // 代码块制表位宽度（tab-size CSS 属性，单位：字符数）
+    "--tpl-code-tab-size": codeBlockStyles?.tabStop?.defaultMm
+      ? `${Math.round(codeBlockStyles.tabStop.defaultMm / 3)}` : '4',
+
+    // 纸张尺寸预览（编辑器宽度跟随纸张配置）
+    ...((() => {
+      if (!layout) return {}
+      const PAPER_WIDTH: Record<string, string> = {
+        A4: '210mm', A3: '297mm', B5: '176mm',
+        Letter: '215.9mm', Legal: '215.9mm', '16K': '185mm', '8K': '270mm',
+      }
+      const isLandscape = layout.paperDirection === 'landscape'
+      const paperSize = layout.paperSize ?? 'A4'
+      // 自定义尺寸优先
+      let paperWidthMm = layout.pageWidthMm
+      let paperHeightMm = layout.pageHeightMm
+      if (!paperWidthMm) {
+        const stdW = PAPER_WIDTH[paperSize]
+        paperWidthMm = stdW ? parseFloat(stdW) : 210
+      }
+      if (isLandscape && paperHeightMm) {
+        // 横向：宽高互换
+        const tmp = paperWidthMm
+        paperWidthMm = paperHeightMm
+        paperHeightMm = tmp
+      }
+      return {
+        "--tpl-paper-width": `${paperWidthMm}mm`,
+        "--tpl-paper-padding": layout
+          ? `${layout.marginTopMm ?? 25}mm ${layout.marginRightMm ?? 20}mm ${layout.marginBottomMm ?? 25}mm ${layout.marginLeftMm ?? 20}mm`
+          : undefined,
+      }
+    })()),
+  } as unknown as React.CSSProperties
 
   return result
 }
@@ -287,10 +477,10 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
         heading: { levels: [1, 2, 3, 4, 5, 6] },
       }),
       Underline,
-      Table.configure({ resizable: false }),
+      CustomTable.configure({ resizable: false }),
       TableRow,
-      TableHeader,
-      TableCell,
+      CustomTableHeader,
+      CustomTableCell,
       CustomImage,
       Placeholder.configure({
         placeholder: "",
@@ -316,10 +506,16 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
     },
     onUpdate({ editor }) {
       if (skipUpdate.current) return
-      const md = (editor.storage as any).markdown.getMarkdown()
-      setContent(md)
-      // 防抖重新计算 style-key（文档结构变化时才需要）
-      debounceStyleKey(editor)
+      const mdStorage = (editor?.storage as any)?.markdown
+      if (!mdStorage?.getMarkdown) return
+      try {
+        const md = mdStorage.getMarkdown()
+        setContent(md)
+        debounceStyleKey(editor)
+      } catch {
+        // getMarkdown 内部调用 editor.state.doc.textContent，
+        // 编辑器销毁竞态时 state 为 null，直接吞掉即可
+      }
     },
     onCreate({ editor }) {
       // 为文档标题段落添加 class（支持 p 和 h1）
@@ -479,35 +675,41 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
   // 响应外部 content 变化（如 AI 对话填入内容）
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
-    const current = (editor.storage as any).markdown.getMarkdown()
-    if (current !== content) {
-      skipUpdate.current = true
-      editor.commands.setContent(content)
-      skipUpdate.current = false
-      // 内容加载后等待渲染完成再标记
-      setTimeout(() => {
-        const dom = editor.view.dom as HTMLElement
-        if (!dom) return
-        const firstH1 = dom.querySelector("h1:first-of-type")
-        if (firstH1) {
-          firstH1.classList.add("document-title")
-        } else {
-          const firstP = dom.querySelector("p:first-of-type")
-          if (firstP) {
-            firstP.classList.add("document-title")
+    const mdStorage = (editor.storage as any)?.markdown
+    if (!mdStorage?.getMarkdown) return
+    try {
+      const current = mdStorage.getMarkdown()
+      if (current !== content) {
+        skipUpdate.current = true
+        editor.commands.setContent(content)
+        skipUpdate.current = false
+        // 内容加载后等待渲染完成再标记
+        setTimeout(() => {
+          const dom = editor.view.dom as HTMLElement
+          if (!dom) return
+          const firstH1 = dom.querySelector("h1:first-of-type")
+          if (firstH1) {
+            firstH1.classList.add("document-title")
+          } else {
+            const firstP = dom.querySelector("p:first-of-type")
+            if (firstP) {
+              firstP.classList.add("document-title")
+            }
           }
-        }
-        // 标记副标题（第二个段落）
-        const blocks = dom.querySelectorAll(
-          ":scope > p, :scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6",
-        )
-        if (blocks.length >= 2) {
-          const secondBlock = blocks[1]
-          if (!secondBlock.classList.contains("document-title")) {
-            secondBlock.classList.add("document-subtitle")
+          // 标记副标题（第二个段落）
+          const blocks = dom.querySelectorAll(
+            ":scope > p, :scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6",
+          )
+          if (blocks.length >= 2) {
+            const secondBlock = blocks[1]
+            if (!secondBlock.classList.contains("document-title")) {
+              secondBlock.classList.add("document-subtitle")
+            }
           }
-        }
-      }, 100)
+        }, 100)
+      }
+    } catch {
+      // getMarkdown 竞态时 editor.state 为 null，忽略即可
     }
   }, [content]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -595,12 +797,12 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
       const spacing = imageStyles?.spacing ?? {}
       const border = imageStyles?.border ?? {}
       const style = imageStyles?.style ?? {}
-      // 兼容 border.borderWidthPt 和 position.borderWidthPt
-      const borderWidthPt = border.borderWidthPt ?? position.borderWidthPt ?? 0
+      // 兼容 border.widthPt 和 position.borderWidthPt
+      const borderWidthPt = border.widthPt ?? position.borderWidthPt ?? 0
       const showBorder = border.showBorder || borderWidthPt > 0
       const borderColor = border.color ?? position.borderColor ?? '#000000'
       
-      editor.chain().focus().setImage({ 
+      editor.chain().focus().setImage({
         src: base64,
         wrapType: position.wrapType ?? 'inline',
         imgAlign: position.horizontalAlign ?? 'left',
@@ -611,17 +813,14 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
         marginBottomCm: spacing.marginBottomCm ?? 0,
         marginLeftCm: spacing.marginLeftCm ?? 0,
         marginRightCm: spacing.marginRightCm ?? 0,
-        // 图片效果
         brightness: style.brightness ?? 0,
         contrast: style.contrast ?? 0,
-        // 图片基础设置
         sizeMode: position.sizeMode ?? 'original',
         maxWidthCm: position.maxWidthCm,
         maxHeightCm: position.maxHeightCm,
         keepAspectRatio: position.keepAspectRatio ?? true,
-        // 行间距
         lineSpacing: imageStyles?.lineSpacing ?? 1.0,
-      }).run()
+      } as any).run()
     }
     window.addEventListener("editor-insert-image", onInsertImage)
     return () =>
@@ -649,8 +848,8 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
     const border = imageStyles.border ?? {}
     const style = imageStyles.style ?? {}
     const { wrapType, horizontalAlign, sizeMode, maxWidthCm, maxHeightCm, keepAspectRatio } = position
-    // 兼容两种格式：border.borderWidthPt 和 position.borderWidthPt
-    const borderWidthPt = border.borderWidthPt ?? position.borderWidthPt
+    // 兼容两种格式：border.widthPt 和 position.borderWidthPt
+    const borderWidthPt = border.widthPt ?? position.borderWidthPt
     const showBorder = border.showBorder ?? (borderWidthPt !== undefined && borderWidthPt > 0)
     const borderColor = border.color ?? position.borderColor ?? '#000000'
     console.log('[TipTapEditor] 图片同步触发:', { wrapType, horizontalAlign, border, position, borderWidthPt, showBorder, style })
@@ -720,6 +919,49 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
     }
   }, [editor, previewConfig?.imageStyles])
 
+  // 监听表格样式配置变化，同步更新所有现有表格节点的属性
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return
+    if (!previewConfig?.tableStyles) return
+
+    const ts = previewConfig.tableStyles
+    const cellPad = ts.cellPadding ?? {}
+    const rowH = ts.rowHeight ?? {}
+
+    console.log('[TipTapEditor] 表格样式同步触发:', ts)
+
+    editor.chain().command(({ tr, state }) => {
+      let count = 0
+      state.doc.descendants((node, pos) => {
+        if (node.type.name === 'table') {
+          count++
+          const newAttrs = {
+            ...node.attrs,
+            tableAlign: ts.tableAlignment ?? node.attrs.tableAlign ?? 'left',
+            tableWidth: ts.tableWidth ?? node.attrs.tableWidth ?? 100,
+            borderColor: ts.border?.color ?? node.attrs.borderColor ?? '#000000',
+            borderWidthPt: ts.border?.widthPt ?? node.attrs.borderWidthPt ?? 0.5,
+            borderStyle: ts.border?.style ?? node.attrs.borderStyle ?? 'solid',
+            shadingFill: ts.shading?.fill ?? node.attrs.shadingFill ?? 'transparent',
+            cellPadTop: cellPad.top ?? node.attrs.cellPadTop ?? 0.14,
+            cellPadRight: cellPad.right ?? node.attrs.cellPadRight ?? 0,
+            cellPadBottom: cellPad.bottom ?? node.attrs.cellPadBottom ?? 0.14,
+            cellPadLeft: cellPad.left ?? node.attrs.cellPadLeft ?? 0,
+            headerBg: ts.headerStyle?.shading?.fill ?? node.attrs.headerBg ?? '#f0f0f0',
+            headerFontSizePt: ts.headerStyle?.font?.fontSizePt ?? node.attrs.headerFontSizePt ?? 0,
+            headerBold: ts.headerStyle?.font?.bold ?? node.attrs.headerBold ?? true,
+            dataRowBg: ts.dataRowStyle?.shading?.fill ?? node.attrs.dataRowBg ?? 'transparent',
+            dataRowFontSizePt: ts.dataRowStyle?.font?.fontSizePt ?? node.attrs.dataRowFontSizePt ?? 0,
+            dataRowBold: ts.dataRowStyle?.font?.bold ?? node.attrs.dataRowBold ?? false,
+          }
+          tr.setNodeMarkup(pos, undefined, newAttrs)
+        }
+      })
+      console.log(`[TipTapEditor] 同步了 ${count} 个表格`)
+      return count > 0
+    }).run()
+  }, [editor, previewConfig?.tableStyles])
+
   // ESC 退出全屏
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -767,6 +1009,8 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
   const finalStyle = useMemo(() => {
     if (previewConfig) {
       // 有模板时，使用模板配置
+      console.log('[TipTapEditor] buildTemplateStyle 输入 - previewConfig.tableStyles:', previewConfig.tableStyles)
+      console.log('[TipTapEditor] buildTemplateStyle 输入 - tableStyles.headerStyle:', previewConfig.tableStyles?.headerStyle)
       return templateStyle
     }
     // 没有模板时，根据标题的实际加粗状态设置 CSS 变量
@@ -775,6 +1019,15 @@ export function TipTapEditor({ onReady, onEditFormula }: TipTapEditorProps) {
       "--tpl-title-weight": titleActualBold ? "700" : "400",
     }
   }, [templateStyle, previewConfig, titleActualBold])
+
+  // 调试：打印 finalStyle 中的表格 CSS 变量
+  useEffect(() => {
+    console.log('[TipTapEditor] finalStyle 中的表格 CSS 变量:', {
+      '--tpl-table-th-font-bold': (finalStyle as any)['--tpl-table-th-font-bold'],
+      '--tpl-table-header-bg': (finalStyle as any)['--tpl-table-header-bg'],
+      '--tpl-table-font-bold': (finalStyle as any)['--tpl-table-font-bold'],
+    })
+  }, [finalStyle])
 
   // 追踪模板设置的变化（只在模板面板主动修改时触发）
   const lastTemplateBoldRef = useRef<boolean | undefined>(undefined)

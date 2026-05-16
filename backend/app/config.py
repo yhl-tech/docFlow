@@ -34,7 +34,7 @@ class Settings(BaseSettings):
 
     # 服务器
     HOST: str = "0.0.0.0"
-    PORT: int = 8001
+    PORT: int = 8000
     DEBUG: bool = False
     CORS_ORIGINS: str = "http://localhost:3000"
 

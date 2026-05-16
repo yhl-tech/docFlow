@@ -189,18 +189,18 @@ export function useAI(options: UseAIOptions = {}): UseAIReturn {
   ): Promise<string | null> => {
     setIsLoading(true)
     try {
-      const params: Record<string, unknown> = { text, type }
-      if (type === '扩写' && subOption) {
-        params.expandSubType = subOption
-      } else if (type === '改写' && subOption) {
-        if (['向上汇报', '向下传达', '对外宣传', '口语化'].includes(subOption)) {
-          params.toneSubType = subOption
-        } else if (['中译英', '英译中', '中译日'].includes(subOption)) {
-          params.translateSubType = subOption
-        }
-      }
-
-      const response = await aiService.rewrite(params)
+      const response = await aiService.rewrite({
+        text,
+        type: type as import('@/lib/api').RewriteType,
+        ...((type === '扩写' && subOption) ? { expandSubType: subOption } : {}),
+        ...((type === '改写' && subOption) ? (
+          ['向上汇报', '向下传达', '对外宣传', '口语化'].includes(subOption)
+            ? { toneSubType: subOption }
+            : ['中译英', '英译中', '中译日'].includes(subOption)
+              ? { translateSubType: subOption }
+              : {}
+        ) : {}),
+      } as any)
       onSuccess?.(response.result)
       return response.result
     } catch {

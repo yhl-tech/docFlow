@@ -2,7 +2,7 @@
 
 import { create } from 'zustand'
 import authService from '@/lib/api/auth'
-import type { UserInfo } from '@/lib/api'
+import type { UserInfo } from '@/lib/api/auth'
 
 interface AuthState {
   user: UserInfo | null

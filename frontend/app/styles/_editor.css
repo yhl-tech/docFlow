@@ -63,12 +63,17 @@
 /* 文档表格 */
 .editor-document table {
   border-collapse: collapse;
+  border-spacing: 0;
   width: 100%;
   margin: 0.75rem 0;
 }
+.editor-document table,
+.editor-document table th,
+.editor-document table td {
+  border: 1px solid #e5e7eb;
+}
 .editor-document th,
 .editor-document td {
-  border: 1px solid #e5e7eb;
   padding: 0.375rem 0.75rem;
 }
 .editor-document th {
@@ -213,26 +218,37 @@
   font-size: inherit;
 }
 
-/* 表格 */
+/* 表格 — 基础样式（tpl-paper 样式有 !important 会覆盖这里） */
 .tiptap-editor table {
   border-collapse: collapse;
+  border-spacing: 0;
   width: 100%;
   margin: 0.875rem 0;
   font-size: 0.875rem;
 }
+/* 重要：td/th 边框使用 !important，确保模板 CSS 能正确覆盖 */
 .tiptap-editor th,
 .tiptap-editor td {
   border: 1px solid #e5e7eb;
   padding: 0.5rem 0.875rem;
-  text-align: left;
 }
 .tiptap-editor th {
-  background: #f9fafb;
+  background: transparent;
   font-weight: 600;
-  color: #374151;
 }
-.tiptap-editor tr:nth-child(even) td {
-  background: #fafafa;
+
+/* 表格选中单元格高亮（TipTap 内置选择机制） */
+.tiptap-editor .ProseMirror-selectednode {
+  outline: 2px solid #818cf8 !important;
+  outline-offset: -1px;
+}
+.tiptap-editor td.ProseMirror-selectedcell,
+.tiptap-editor th.ProseMirror-selectedcell {
+  background-color: rgba(99, 102, 241, 0.1) !important;
+  outline: 2px solid #6366f1 !important;
+}
+.tiptap-editor .selectedCell {
+  background-color: rgba(99, 102, 241, 0.12) !important;
 }
 
 /* 图片 */

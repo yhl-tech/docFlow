@@ -1,26 +1,33 @@
-import { api } from './instance'
+import { api } from "./instance"
 
 /**
  * AI 对话相关类型定义
  */
 
 // 可用的 AI 模型
-export type AIModel = 'deepseek-v3' | 'deepseek-r1' | 'qwen-turbo' | 'qwen-plus' | 'qwen-max' | 'kimi' | 'custom'
+export type AIModel =
+  | "deepseek-v3"
+  | "deepseek-r1"
+  | "qwen-turbo"
+  | "qwen-plus"
+  | "qwen-max"
+  | "kimi"
+  | "custom"
 
 // 文本润色类型
-export type RewriteType = '改写' | '扩写' | '缩写' | '润色'
+export type RewriteType = "改写" | "扩写" | "缩写" | "润色"
 
 // 扩写子类型
-export type ExpandSubType = '简单扩写' | '丰富细节' | '增加论据'
+export type ExpandSubType = "简单扩写" | "丰富细节" | "增加论据"
 
 // 语气调整子类型
-export type ToneSubType = '向上汇报' | '向下传达' | '对外宣传' | '口语化'
+export type ToneSubType = "向上汇报" | "向下传达" | "对外宣传" | "口语化"
 
 // 翻译子类型
-export type TranslateSubType = '中译英' | '英译中' | '中译日'
+export type TranslateSubType = "中译英" | "英译中" | "中译日"
 
 // 聊天消息角色
-export type ChatRole = 'user' | 'assistant' | 'system'
+export type ChatRole = "user" | "assistant" | "system"
 
 // 聊天消息
 export interface ChatMessage {
@@ -73,7 +80,7 @@ export const aiService = {
    * 通用 AI 对话
    */
   async chat(params: ChatParams): Promise<ChatResponse> {
-    const res = await api.post('/api/ai/chat', params)
+    const res = await api.post("/api/ai/chat", params)
     return res.data
   },
 
@@ -81,13 +88,14 @@ export const aiService = {
    * 流式 AI 对话（用于实时对话场景）
    */
   async *chatStream(params: ChatParams) {
-    const baseURL = process.env.NODE_ENV === 'production'
-      ? '/docFlow'
-      : (process.env.NEXT_PUBLIC_API_URL_DEV ?? 'http://localhost:8000')
+    const baseURL =
+      process.env.NODE_ENV === "production"
+        ? "/docFlow"
+        : (process.env.NEXT_PUBLIC_API_URL_DEV ?? "http://localhost:8000")
     const response = await fetch(`${baseURL}/api/ai/chat/stream`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(params),
     })
@@ -98,7 +106,7 @@ export const aiService = {
 
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
-    let buffer = ''
+    let buffer = ""
 
     while (true) {
       const { done, value } = await reader.read()
@@ -107,16 +115,16 @@ export const aiService = {
       buffer += decoder.decode(value, { stream: true })
 
       // 按行分割，处理 SSE 格式
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || '' // 保留未完成的行
+      const lines = buffer.split("\n")
+      buffer = lines.pop() || "" // 保留未完成的行
 
       for (const line of lines) {
         const trimmed = line.trim()
-        if (trimmed.startsWith('data: ')) {
+        if (trimmed.startsWith("data: ")) {
           const data = trimmed.slice(6) // 去掉 "data: " 前缀
 
           // 检查是否是 [DONE] 消息
-          if (data === '[DONE]') {
+          if (data === "[DONE]") {
             return
           }
 
@@ -139,7 +147,7 @@ export const aiService = {
    * 文本润色 - 改写、扩写、缩写、润色
    */
   async rewrite(params: RewriteParams): Promise<RewriteResponse> {
-    const res = await api.post('/api/ai/rewrite', params)
+    const res = await api.post("/api/ai/rewrite", params)
     return res.data
   },
 
@@ -147,28 +155,34 @@ export const aiService = {
    * 扩写（带子类型）
    */
   async expand(text: string, subType: ExpandSubType): Promise<RewriteResponse> {
-    return this.rewrite({ text, type: '扩写', expandSubType: subType })
+    return this.rewrite({ text, type: "扩写", expandSubType: subType })
   },
 
   /**
    * 改变语气
    */
-  async changeTone(text: string, subType: ToneSubType): Promise<RewriteResponse> {
-    return this.rewrite({ text, type: '改写', toneSubType: subType })
+  async changeTone(
+    text: string,
+    subType: ToneSubType,
+  ): Promise<RewriteResponse> {
+    return this.rewrite({ text, type: "改写", toneSubType: subType })
   },
 
   /**
    * 翻译
    */
-  async translate(text: string, subType: TranslateSubType): Promise<RewriteResponse> {
-    return this.rewrite({ text, type: '改写', translateSubType: subType })
+  async translate(
+    text: string,
+    subType: TranslateSubType,
+  ): Promise<RewriteResponse> {
+    return this.rewrite({ text, type: "改写", translateSubType: subType })
   },
 
   /**
    * 获取可用模型列表
    */
   async getModels(): Promise<AIModel[]> {
-    const res = await api.get('/api/ai/models')
+    const res = await api.get("/api/ai/models")
     return res.data
   },
 }

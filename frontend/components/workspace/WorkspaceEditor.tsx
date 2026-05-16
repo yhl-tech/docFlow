@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import type { Editor } from '@tiptap/react'
@@ -22,6 +22,8 @@ export function WorkspaceEditor() {
 
   // TipTap Editor 实例，就绪后由 TipTapEditor 回调传入，供工具栏使用
   const editorRef = useRef<Editor | null>(null)
+  // 用 state 追踪 editor 就绪状态，确保 effect 能响应
+  const [editorReady, setEditorReady] = useState(false)
 
   function handleClear() {
     if (!content) return
@@ -39,6 +41,7 @@ export function WorkspaceEditor() {
       {/* 工具栏 */}
       <EditorRichToolbar
         editorRef={editorRef}
+        editorReady={editorReady}
         onClear={handleClear}
         editingFormula={editingFormula}
         onClearEdit={() => setEditingFormula(null)}
@@ -47,7 +50,10 @@ export function WorkspaceEditor() {
       {/* 编辑区（TipTap WYSIWYG） */}
       <div className="flex-1 overflow-hidden">
         <TipTapEditor
-          onReady={(editor) => { editorRef.current = editor }}
+          onReady={(editor) => {
+            editorRef.current = editor
+            setEditorReady(true)
+          }}
           onEditFormula={(latex, displayMode, pos) => setEditingFormula({ latex, displayMode, pos })}
         />
       </div>

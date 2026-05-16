@@ -429,7 +429,11 @@ export interface TableStyleConfig {
 
   // 表格编号
   tableNumbering?: {
-    enabled?: boolean
+    enabled?: boolean       // 是否启用编号，默认 true
+    prefix?: string        // 编号前缀，默认 "表 "
+    suffix?: string        // 编号后缀，默认 "  "
+    startNumber?: number   // 起始编号，默认 1
+    style?: 'number' | 'arabic' | 'roman'  // 编号样式，默认 'number'
   }
 
   // 行高

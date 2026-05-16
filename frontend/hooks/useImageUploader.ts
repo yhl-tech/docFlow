@@ -57,10 +57,10 @@ const DEFAULT_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/we
 // ============================================================
 
 function handleApiError(error: unknown, fallbackMsg: string, onError?: (error: Error) => void): string {
-  const err = error as Error
+  const err = error as { response?: { data?: { error?: string } }; message?: string }
   const message = err.response?.data?.error ?? err.message ?? fallbackMsg
   toast.error(message)
-  onError?.(err)
+  onError?.(err as unknown as Error)
   return message
 }
 

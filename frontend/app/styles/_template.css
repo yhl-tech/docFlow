@@ -1,5 +1,12 @@
 /* ─── 模板纸张样式 ─── */
 
+/* 纸张宽度预览：跟随配置动态调整，默认 A4（210mm）*/
+.tpl-paper {
+  max-width: var(--tpl-paper-width, 210mm) !important;
+  padding: var(--tpl-paper-padding, 25mm 20mm 25mm 20mm) !important;
+  box-sizing: border-box !important;
+}
+
 /* TipTap 实际容器类是 .tiptap，不是 .tiptap-editor */
 .tpl-paper .tiptap {
   font-family: var(--tpl-body-font, inherit);
@@ -70,8 +77,9 @@
   font-size: var(--tpl-h1-size, 1rem) !important;
   font-weight: var(--tpl-h1-weight, 700) !important;
   text-align: var(--tpl-h1-align, left) !important;
-  margin: 1.25rem 0 0.5rem !important;
-  line-height: 1.3 !important;
+  margin-top: var(--tpl-h1-space-before, 1.25rem) !important;
+  margin-bottom: var(--tpl-h1-space-after, 0.5rem) !important;
+  line-height: var(--tpl-h1-line-height, 1.3) !important;
 }
 
 /* 标题 h2 */
@@ -80,8 +88,9 @@
   font-size: var(--tpl-h2-size, 1rem) !important;
   font-weight: var(--tpl-h2-weight, 700) !important;
   text-align: var(--tpl-h2-align, left) !important;
-  margin: 1rem 0 0.5rem !important;
-  line-height: 1.35 !important;
+  margin-top: var(--tpl-h2-space-before, 1rem) !important;
+  margin-bottom: var(--tpl-h2-space-after, 0.5rem) !important;
+  line-height: var(--tpl-h2-line-height, 1.35) !important;
 }
 
 /* 标题 h3 */
@@ -90,8 +99,9 @@
   font-size: var(--tpl-h3-size, 1rem) !important;
   font-weight: var(--tpl-h3-weight, 600) !important;
   text-align: var(--tpl-h3-align, left) !important;
-  margin: 0.875rem 0 0.375rem !important;
-  line-height: 1.35 !important;
+  margin-top: var(--tpl-h3-space-before, 0.875rem) !important;
+  margin-bottom: var(--tpl-h3-space-after, 0.375rem) !important;
+  line-height: var(--tpl-h3-line-height, 1.35) !important;
 }
 
 /* 标题 h4 */
@@ -100,8 +110,9 @@
   font-size: var(--tpl-h4-size, 1rem) !important;
   font-weight: var(--tpl-h4-weight, 600) !important;
   text-align: var(--tpl-h4-align, left) !important;
-  margin: 0.75rem 0 0.25rem !important;
-  line-height: 1.35 !important;
+  margin-top: var(--tpl-h4-space-before, 0.75rem) !important;
+  margin-bottom: var(--tpl-h4-space-after, 0.25rem) !important;
+  line-height: var(--tpl-h4-line-height, 1.35) !important;
 }
 
 /* 标题 h5 */
@@ -110,6 +121,269 @@
   font-size: var(--tpl-h5-size, 1rem) !important;
   font-weight: var(--tpl-h5-weight, 600) !important;
   text-align: var(--tpl-h5-align, left) !important;
-  margin: 0.75rem 0 0.25rem !important;
-  line-height: 1.35 !important;
+  margin-top: var(--tpl-h5-space-before, 0.75rem) !important;
+  margin-bottom: var(--tpl-h5-space-after, 0.25rem) !important;
+  line-height: var(--tpl-h5-line-height, 1.35) !important;
+}
+
+/* ─── 表格样式 ─── */
+
+/* 表格默认宽度 - 使用 table-layout: auto 让浏览器自动分配列宽 */
+/* fixed 模式在 TipTap 无 colwidth 时会导致列宽为 0（列消失），故改用 auto */
+.tpl-paper .tiptap table,
+.tpl-paper table {
+  width: var(--tpl-table-width, 100%) !important;
+  table-layout: auto !important;
+  box-sizing: border-box !important;
+}
+
+/* 表格边框 — 内部线（th/td 间）用 --tpl-table-border-width-inner，外框用 --tpl-table-border-outer-width */
+/* 注意：border-width 只支持 px/em 等长度单位，不支持 pt */
+.tpl-paper .tiptap table th,
+.tpl-paper .tiptap table td,
+.tpl-paper table th,
+.tpl-paper table td {
+  border-color: var(--tpl-table-border-color-inner, #000000) !important;
+  border-style: var(--tpl-table-border-style, solid) !important;
+  border-width: var(--tpl-table-border-width-inner, 1px) !important;
+  box-sizing: border-box !important;
+}
+
+/* 表格外框单独控制（preset=outline 时内部线=0，外框保留；preset=none 全部为0） */
+.tpl-paper .tiptap table,
+.tpl-paper table {
+  border-color: var(--tpl-table-border-color-inner, #000000) !important;
+  border-style: var(--tpl-table-border-style, solid) !important;
+  border-width: var(--tpl-table-border-outer-width, var(--tpl-table-border-width-inner, 1px)) !important;
+  box-sizing: border-box !important;
+}
+
+/* 合并边框 */
+.tpl-paper .tiptap table,
+.tpl-paper table {
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
+}
+
+/* 单元格内边距 — 使用分拆的边距变量，并加默认值 */
+/* box-sizing: border-box 确保 padding 不会撑大单元格 */
+.tpl-paper .tiptap table th,
+.tpl-paper .tiptap table td,
+.tpl-paper table th,
+.tpl-paper table td {
+  padding: var(--tpl-table-cell-pad-top, 0.14cm) var(--tpl-table-cell-pad-right, 0cm) var(--tpl-table-cell-pad-bottom, 0.14cm) var(--tpl-table-cell-pad-left, 0cm) !important;
+  padding-top: var(--tpl-table-cell-pad-top, 0.14cm) !important;
+  padding-right: var(--tpl-table-cell-pad-right, 0cm) !important;
+  padding-bottom: var(--tpl-table-cell-pad-bottom, 0.14cm) !important;
+  padding-left: var(--tpl-table-cell-pad-left, 0cm) !important;
+  box-sizing: border-box !important;
+  /* 确保长文本换行 */
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+}
+
+/* 表格对齐方式（使用 CSS 变量控制） */
+.tpl-paper .tiptap table,
+.tpl-paper table {
+  margin-top: 0.5em !important;
+  margin-bottom: 0.5em !important;
+  /* 使用 CSS 变量控制水平对齐 */
+  margin-left: var(--tpl-table-ml, 0) !important;
+  margin-right: var(--tpl-table-mr, auto) !important;
+}
+
+/* 表格底纹 */
+.tpl-paper .tiptap table,
+.tpl-paper table {
+  background-color: var(--tpl-table-shading, transparent) !important;
+}
+
+/* 表头样式 — 使用 CSS 变量 + data-* 属性双层兜底 */
+.tpl-paper .tiptap table th,
+.tpl-paper table th {
+  background-color: var(--tpl-table-header-bg, transparent) !important;
+  font-weight: var(--tpl-table-th-font-bold, inherit) !important;
+  vertical-align: var(--tpl-table-th-valign, middle) !important;
+  text-align: var(--tpl-table-th-align, left) !important;
+  line-height: var(--tpl-table-th-line-height, inherit) !important;
+  min-height: var(--tpl-table-header-min-height, auto) !important;
+}
+
+/* 数据行行高（tr min-height 浏览器不生效，用 td height 间接实现） */
+.tpl-paper .tiptap table td,
+.tpl-paper table td {
+  height: var(--tpl-table-row-min-height, auto) !important;
+}
+
+/* 单元格样式（合并所有 td 样式，避免规则重复导致冲突） */
+.tpl-paper .tiptap table td,
+.tpl-paper table td {
+  /* 对齐 */
+  vertical-align: var(--tpl-table-td-valign, middle) !important;
+  text-align: var(--tpl-table-td-align, left) !important;
+  /* 字体 */
+  font-family: var(--tpl-table-font-family, inherit) !important;
+  font-size: var(--tpl-table-font-size, inherit) !important;
+  color: var(--tpl-table-color, inherit) !important;
+  line-height: var(--tpl-table-line-height, inherit) !important;
+  font-style: var(--tpl-table-font-italic, inherit) !important;
+  font-weight: var(--tpl-table-font-bold, inherit) !important;
+  text-decoration: var(--tpl-table-text-decoration, inherit) !important;
+  /* 底纹：优先 dataRowStyle.shading，其次全局 shading（applyTo=cell） */
+  background-color: var(--tpl-table-row-bg, var(--tpl-table-cell-shading, transparent)) !important;
+}
+
+/* 表格单元格内的段落 - 覆盖正文段落的 font-weight */
+.tpl-paper .tiptap table td p,
+.tpl-paper table td p {
+  font-weight: var(--tpl-table-font-bold, inherit) !important;
+  font-family: var(--tpl-table-font-family, inherit) !important;
+  font-size: var(--tpl-table-font-size, inherit) !important;
+  color: var(--tpl-table-color, inherit) !important;
+  font-style: var(--tpl-table-font-italic, inherit) !important;
+  text-decoration: var(--tpl-table-text-decoration, inherit) !important;
+}
+
+/* 表格表头内的段落 - 覆盖正文段落的 font-weight */
+.tpl-paper .tiptap table th p,
+.tpl-paper table th p {
+  font-weight: var(--tpl-table-th-font-bold, inherit) !important;
+  font-family: var(--tpl-table-th-font-family, inherit) !important;
+  font-size: var(--tpl-table-th-font-size, inherit) !important;
+  color: var(--tpl-table-th-color, inherit) !important;
+  font-style: var(--tpl-table-th-font-italic, inherit) !important;
+  text-decoration: var(--tpl-table-th-text-decoration, inherit) !important;
+}
+
+/* 表格表头字体样式 */
+.tpl-paper .tiptap table th,
+.tpl-paper table th {
+  font-family: var(--tpl-table-th-font-family, inherit) !important;
+  font-size: var(--tpl-table-th-font-size, inherit) !important;
+  color: var(--tpl-table-th-color, inherit) !important;
+  font-style: var(--tpl-table-th-font-italic, inherit) !important;
+  text-decoration: var(--tpl-table-th-text-decoration, inherit) !important;
+}
+
+/* ─── 列表样式 ─── */
+
+/* 无序列表容器 */
+.tpl-paper .tiptap ul {
+  padding-left: var(--tpl-ul-indent, 1.5em) !important;
+  margin-top: var(--tpl-ul-space-before, 0) !important;
+  margin-bottom: var(--tpl-ul-space-after, 0) !important;
+  line-height: var(--tpl-ul-line-height, inherit) !important;
+}
+
+/* 无序列表符号：使用 CSS counter 配合 ::before 实现自定义符号和颜色 */
+.tpl-paper .tiptap ul li {
+  list-style: none !important;
+  position: relative !important;
+}
+.tpl-paper .tiptap ul li::before {
+  content: var(--tpl-ul-marker, "●") !important;
+  color: var(--tpl-ul-marker-color, inherit) !important;
+  font-family: var(--tpl-ul-marker-font, inherit) !important;
+  position: absolute !important;
+  left: -1.2em !important;
+}
+
+/* 有序列表容器 */
+.tpl-paper .tiptap ol {
+  padding-left: var(--tpl-ol-indent, 1.5em) !important;
+  margin-top: var(--tpl-ol-space-before, 0) !important;
+  margin-bottom: var(--tpl-ol-space-after, 0) !important;
+  line-height: var(--tpl-ol-line-height, inherit) !important;
+}
+
+/* 有序列表项符号颜色和字体 */
+.tpl-paper .tiptap ol li::marker {
+  color: var(--tpl-ol-marker-color, inherit) !important;
+  font-family: var(--tpl-ol-marker-font, inherit) !important;
+}
+
+/* ─── 代码块样式 ─── */
+
+/* 多行代码块（pre） */
+.tpl-paper .tiptap pre {
+  font-family: var(--tpl-code-font, "JetBrains Mono", "Fira Code", Consolas, monospace) !important;
+  font-size: var(--tpl-code-size, 0.8125rem) !important;
+  color: var(--tpl-code-color, #e2e8f0) !important;
+  background-color: var(--tpl-code-bg, #1e293b) !important;
+  line-height: var(--tpl-code-line-height, 1.65) !important;
+  border: var(--tpl-code-border, none) !important;
+  padding-top: var(--tpl-code-padding-top, 1rem) !important;
+  padding-bottom: var(--tpl-code-padding-bottom, 1rem) !important;
+  padding-left: var(--tpl-code-padding-left, 1.25rem) !important;
+  padding-right: var(--tpl-code-padding-right, 1.25rem) !important;
+  border-radius: 8px !important;
+  overflow-x: auto !important;
+  margin: 0.75rem 0 !important;
+}
+
+/* pre 内的 code 继承 pre 的颜色，不覆盖 */
+.tpl-paper .tiptap pre code {
+  background: transparent !important;
+  padding: 0 !important;
+  color: inherit !important;
+  font-size: inherit !important;
+  font-family: inherit !important;
+  border: none !important;
+}
+
+/* ─── 代码块对齐 ─── */
+.tpl-paper .tiptap pre {
+  text-align: var(--tpl-code-align, left) !important;
+}
+
+/* ─── 图片样式 ─── */
+
+/* 图片间距、边框、亮度/对比度效果 */
+.tpl-paper .tiptap img {
+  margin-top: var(--tpl-img-margin-top, 0) !important;
+  margin-bottom: var(--tpl-img-margin-bottom, 0) !important;
+  margin-left: var(--tpl-img-margin-left, 0) !important;
+  margin-right: var(--tpl-img-margin-right, 0) !important;
+  border: var(--tpl-img-border, none) !important;
+  filter: var(--tpl-img-filter, none) var(--tpl-img-recolor, none) !important;
+  max-width: var(--tpl-img-max-width, 100%) !important;
+  max-height: var(--tpl-img-max-height, none) !important;
+}
+
+/* 图片文字环绕距离预览（inline 模式用 margin 模拟 distanceMm） */
+.tpl-paper .tiptap p:has(> img) {
+  padding: var(--tpl-img-wrap-distance, 0) !important;
+}
+
+/* 图片对齐：通过包裹段落的 text-align 实现（inline 图片跟随段落对齐） */
+.tpl-paper .tiptap p:has(> img:only-child),
+.tpl-paper .tiptap p:has(> .ProseMirror-selectednode) {
+  text-align: var(--tpl-img-align, left) !important;
+}
+
+/* 代码块制表位宽度 */
+.tpl-paper .tiptap pre {
+  tab-size: var(--tpl-code-tab-size, 4) !important;
+}
+
+/* 代码块内联键盘样式（kbd 元素） */
+.tpl-paper .tiptap kbd {
+  color: var(--tpl-code-keyboard-color, inherit) !important;
+  background-color: var(--tpl-code-keyboard-bg, #f0f0f0) !important;
+  border: 1px solid currentColor !important;
+  border-radius: 3px !important;
+  padding: 0.1em 0.3em !important;
+  font-family: inherit !important;
+}
+
+/* 代码块行号（当 lineNumber.show=true 时显示，通过 counter 模拟） */
+.tpl-paper .tiptap pre[data-line-numbers] .line::before {
+  display: var(--tpl-code-line-number-show, none) !important;
+  counter-increment: linenumber !important;
+  content: counter(linenumber) !important;
+  color: var(--tpl-code-line-number-color, #888888) !important;
+  min-width: 2.5em !important;
+  padding-right: 0.5em !important;
+  text-align: right !important;
+  user-select: none !important;
 }

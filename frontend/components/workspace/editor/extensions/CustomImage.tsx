@@ -63,6 +63,7 @@ const CustomImage = Image.extend({
 
   addCommands() {
     return {
+      ...this.parent?.(),
       setImage:
         (options: {
           src: string;

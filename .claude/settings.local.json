@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(python -m pytest tests/unit/services/test_export_service.py -x -q)",
+      "Bash(grep -n \"Table\\\\$1\\\\|name.*table\\\\|tableRow\\\\|tableCell\\\\|tableHeader\" \"d:/project/dssxz/code/frontend/node_modules/tiptap-markdown/dist/tiptap-markdown.es.js\")",
+      "Bash(python -m pytest --co -q)",
+      "Bash(python -c \"import sys; print\\(sys.executable\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(conda run *)",
+      "Bash(.venv/Scripts/python.exe -c ' *)",
+      "PowerShell(& \"D:\\\\software\\\\miniconda3\\\\envs\\\\dssxz\\\\python.exe\" \"$env:TEMP\\\\test_pandoc.py\" 2>&1)",
+      "PowerShell(& \"D:\\\\software\\\\miniconda3\\\\python.exe\" -c \"import sys; print\\(sys.version\\)\" 2>&1)",
+      "PowerShell(& \"D:\\\\software\\\\miniconda3\\\\python.exe\" -c \"from docx import Document; print\\('docx ok'\\)\" 2>&1)",
+      "PowerShell(conda info --envs 2>&1)",
+      "PowerShell(& \"C:\\\\Users\\\\yuanhl\\\\.conda\\\\envs\\\\dssxz\\\\python.exe\" \"$env:TEMP\\\\test_pandoc.py\" 2>&1)",
+      "Bash(Get-ChildItem -Path \"d:\\\\project\\\\dssxz\\\\code\" -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app/services/export/docx_styler.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app/services/export/docx_styler.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app/services/export/css_generator.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(dir d:\\\\project\\\\dssxz\\\\code\\\\scripts)",
+      "PowerShell($env:PYTHONIOENCODING=\"utf-8\"; & \"D:\\\\software\\\\miniconda3\\\\envs\\\\dssxz\\\\python.exe\" -m pytest \"d:\\\\project\\\\dssxz\\\\code\\\\backend\\\\tests\\\\unit\\\\services\\\\test_docx_styler_headings.py\" \"d:\\\\project\\\\dssxz\\\\code\\\\backend\\\\tests\\\\unit\\\\services\\\\test_docx_styler_paragraph_list.py\" \"d:\\\\project\\\\dssxz\\\\code\\\\backend\\\\tests\\\\unit\\\\services\\\\test_docx_styler_table.py\" \"d:\\\\project\\\\dssxz\\\\code\\\\backend\\\\tests\\\\unit\\\\services\\\\test_docx_styler_codeblock.py\" -v --tb=short 2>&1 | Select-Object -First 200)",
+      "Bash(conda env *)",
+      "Bash(PYTHONIOENCODING=utf-8 /c/Users/yuanhl/.conda/envs/dssxz/python.exe -m pytest tests/unit/services/test_docx_styler_headings.py tests/unit/services/test_docx_styler_paragraph_list.py tests/unit/services/test_docx_styler_table.py tests/unit/services/test_docx_styler_codeblock.py -v --tb=short)",
+      "Bash(PYTHONIOENCODING=utf-8 /c/Users/yuanhl/.conda/envs/dssxz/python.exe -m pytest tests/unit/services/ -v --tb=short)",
+      "Bash(PYTHONIOENCODING=utf-8 /c/Users/yuanhl/.conda/envs/dssxz/python.exe -m pytest tests/unit/services/ -v --tb=long)",
+      "Bash(python scripts/check_template_coverage.py)",
+      "Bash(PYTHONIOENCODING=utf-8 /c/Users/yuanhl/.conda/envs/dssxz/python.exe -m pytest tests/unit/services/ -q)",
+      "Bash(pandoc -f markdown -t docx -o test_table.docx)",
+      "Bash(del test_table.docx)",
+      "Bash(where pandoc *)",
+      "Bash(cmd /c \"where pandoc\")",
+      "PowerShell(Get-Command pandoc -ErrorAction SilentlyContinue)",
+      "PowerShell(Select-String -Path \"d:\\\\project\\\\dssxz\\\\code\\\\backend\\\\app\\\\routers\\\\editor.py\" -Pattern \"table|美化|beautify\" -SimpleMatch | Select-Object -First 20 | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line\\)\" })",
+      "Bash(C:/Users/yuanhl/.conda/envs/dssxz/python.exe test_fix_table.py)",
+      "Bash(del /f \"d:\\\\project\\\\dssxz\\\\code\\\\backend\\\\test_fix_table.py\")",
+      "Bash(C:\\\\Users\\\\yuanhl\\\\.conda\\\\envs\\\\dssxz\\\\python.exe -m pytest tests/unit/services/test_export_service.py -x -q)",
+      "PowerShell(\\(Get-Command pandoc -ErrorAction SilentlyContinue\\).Source)",
+      "PowerShell(C:\\\\Users\\\\yuanhl\\\\.conda\\\\envs\\\\dssxz\\\\python.exe -c \"import subprocess; r = subprocess.run\\(['where', 'pandoc'], capture_output=True, text=True\\); print\\(r.stdout\\); print\\(r.stderr\\)\")"
+    ]
+  }
+}

@@ -122,6 +122,23 @@ export function useExport(options: UseExportOptions = {}): UseExportReturn {
 
     setExportStatus('loading', '导出中，请稍候...')
 
+    // 导出前检查编辑器内容
+    console.log('[useExport] === 导出前检查 ===')
+    console.log('[useExport] markdown 内容前 200 字符:', content.substring(0, 200))
+    console.log('[useExport] markdown 内容中是否包含 "表":', content.includes('表'))
+    console.log('[useExport] markdown 中表格数量:', (content.match(/\|.+\|/g) ?? []).length)
+    console.log('[useExport] markdown 中表 X 模式匹配:', content.match(/表\s*\d+/g))
+    // 打印完整的表格部分
+    const tableLines = content.split('\n').filter(line => line.trim().startsWith('|'))
+    console.log('[useExport] 表格行内容:', tableLines)
+
+    // 检查表格配置
+    const previewConfig = getPreviewTemplateConfig()
+    console.log('[useExport] === 导出时的表格配置 ===', {
+      tableStyles: previewConfig?.tableStyles,
+      tableNumbering: previewConfig?.tableStyles?.tableNumbering,
+    })
+
     try {
       const previewConfig = getPreviewTemplateConfig()
       const templateId = currentTemplate?.id ?? templateBinding?.templateId

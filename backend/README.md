@@ -43,13 +43,13 @@ cd d:\project\dssxz\code\backend
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-# 改用 8001 端口
+# 改用 8000 端口
 
-nohup uvicorn app.main:app --host 0.0.0.0 --port 8001 > docflow.log 2>&1 &
+nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > docflow.log 2>&1 &
 
 # 先 kill 掉旧进程
 
-pkill -f "uvicorn.\*8001"
+pkill -f "uvicorn.\*8000"
 
 # 再重新启动
 

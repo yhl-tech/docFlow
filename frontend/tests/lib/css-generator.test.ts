@@ -1,5 +1,6 @@
 import { generateTemplateCSS, generatePageCSS, generatePreviewCSS } from '../../lib/utils/css-generator'
 import type { TemplateConfig } from '@/types/editor-template'
+/// <reference types="vitest/globals" />
 
 describe('generateTemplateCSS', () => {
   it('生成 headingStyles.h1 的 CSS', () => {

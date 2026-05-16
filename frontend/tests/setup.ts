@@ -34,7 +34,7 @@ class IntersectionObserverMock {
     return []
   }
 }
-window.IntersectionObserver = IntersectionObserverMock
+window.IntersectionObserver = IntersectionObserverMock as unknown as typeof IntersectionObserver
 
 // Mock window.scrollTo
 Object.defineProperty(window, 'scrollTo', {

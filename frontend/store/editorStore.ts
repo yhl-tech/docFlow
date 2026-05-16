@@ -20,7 +20,7 @@ function deepMerge<T extends Record<string, any>>(
   const result = { ...target }
   for (const key in source) {
     const sourceVal = source[key]
-    if (sourceVal === undefined) continue // 忽略 undefined
+    if (sourceVal === undefined) continue
     const targetVal = target[key]
     if (
       sourceVal !== null &&
@@ -30,15 +30,12 @@ function deepMerge<T extends Record<string, any>>(
       typeof targetVal === "object" &&
       !Array.isArray(targetVal)
     ) {
-      // 两者都是对象，递归合并
-      result[key] = deepMerge(targetVal as any, sourceVal as any)
+      result[key] = deepMerge(targetVal, sourceVal) as any
     } else if (sourceVal !== null) {
-      // null 保留，但 undefined 忽略
       result[key] = sourceVal
     }
-    // 如果 sourceVal 是 null，不覆盖 targetVal
   }
-  return result
+  return result as T
 }
 
 export type ExportFormat = "docx" | "pdf" | "excel" | "image"
@@ -465,6 +462,29 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         defaultFirstLineIndentChars: 2,
       },
       documentRules: { datePlacement: "none", signaturePlacement: "none" },
+      tableStyles: {
+        tableAlignment: "left",
+        tableWidth: 100,
+        headerStyle: {
+          font: { bold: false, italic: false },
+          shading: { fill: "#f0f0f0" },
+        },
+        dataRowStyle: {
+          font: { bold: false },
+        },
+        cellPadding: {
+          top: 0.14,
+          bottom: 0.14,
+          left: 0.05,
+          right: 0.05,
+        },
+        tableNumbering: {
+          enabled: true,
+          prefix: "表 ",
+          suffix: "  ",
+          startNumber: 1,
+        },
+      },
     }
   },
 

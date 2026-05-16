@@ -58,8 +58,8 @@ function mapToFlat(cfg: ImageStyleConfig | undefined): FlatState {
   const dist = tw?.distanceMm ?? {}
   const spacing = cfg?.spacing ?? {}
   const border = cfg?.border ?? {}
-  // 兼容 border.borderWidthPt 和 position.borderWidthPt 两种格式
-  const borderWidthPt = border.borderWidthPt ?? pos.borderWidthPt ?? 0
+  // 兼容 border.widthPt 和 position.borderWidthPt 两种格式
+  const borderWidthPt = border.widthPt ?? pos.borderWidthPt ?? 0
   const borderColor = border.color ?? pos.borderColor ?? ""
   return {
     wrapType: pos.wrapType ?? "inline",
@@ -102,7 +102,7 @@ function mapToNested(flat: FlatState): Partial<ImageStyleConfig> {
     },
     border: {
       color: flat.borderColor || undefined,
-      borderWidthPt: flat.borderWidthPt || undefined,
+      widthPt: flat.borderWidthPt || undefined,
       showBorder: flat.showBorder,
     },
     spacing: {
@@ -253,8 +253,8 @@ export function ImageStyleEditor({
               <NumberInput
                 value={value}
                 onChange={(v) => {
-                  const patch: Record<string, number> = { ...flat, [key]: v }
-                  update(patch)
+                  const patch: Record<string, number | string | boolean> = { ...flat, [key]: v }
+                  update(patch as any)
                 }}
                 min={0}
                 max={10}

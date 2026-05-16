@@ -1,5 +1,6 @@
 """测试 fixtures 和配置"""
 import asyncio
+import io
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Any
@@ -225,9 +226,135 @@ def mock_pandoc_available(monkeypatch: pytest.MonkeyPatch) -> None:
         return True
 
     monkeypatch.setattr(
-        "app.services.export_service.ExportService._check_tool",
+        "app.services.export.tools.ToolChecker.check_tool",
         mock_check,
     )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# docx XML 断言测试用 fixtures
+# ──────────────────────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def make_docx_with_heading():
+    """返回一个工厂函数，创建带指定样式标题的最小 docx Document 对象"""
+    def _factory(style_name: str = "Heading 1", text: str = "测试标题"):
+        from docx import Document
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+        doc = Document()
+        para = doc.add_paragraph(text)
+        # 设置段落样式
+        pPr = para._element.find(qn("w:pPr"))
+        if pPr is None:
+            pPr = OxmlElement("w:pPr")
+            para._element.insert(0, pPr)
+        pStyle = pPr.find(qn("w:pStyle"))
+        if pStyle is None:
+            pStyle = OxmlElement("w:pStyle")
+            pPr.insert(0, pStyle)
+        pStyle.set(qn("w:val"), style_name.replace(" ", ""))
+        # 添加 run
+        if not para.runs:
+            run = para.add_run(text)
+        return doc
+    return _factory
+
+
+@pytest.fixture
+def make_docx_with_table():
+    """返回一个工厂函数，创建带表格（含表头行）的最小 docx Document 对象"""
+    def _factory(rows: int = 3, cols: int = 2):
+        from docx import Document
+        doc = Document()
+        table = doc.add_table(rows=rows, cols=cols)
+        return doc
+    return _factory
+
+
+@pytest.fixture
+def make_docx_with_code_block():
+    """返回一个工厂函数，创建带代码块段落（SourceCode 样式）的最小 docx Document 对象"""
+    def _factory(text: str = "print('hello')"):
+        from docx import Document
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+        doc = Document()
+        para = doc.add_paragraph(text)
+        pPr = para._element.find(qn("w:pPr"))
+        if pPr is None:
+            pPr = OxmlElement("w:pPr")
+            para._element.insert(0, pPr)
+        pStyle = pPr.find(qn("w:pStyle"))
+        if pStyle is None:
+            pStyle = OxmlElement("w:pStyle")
+            pPr.insert(0, pStyle)
+        pStyle.set(qn("w:val"), "SourceCode")
+        if not para.runs:
+            para.add_run(text)
+        return doc
+    return _factory
+
+
+@pytest.fixture
+def make_docx_with_list():
+    """返回一个工厂函数，创建带列表段落（含 numPr）的最小 docx Document 对象"""
+    def _factory(is_ordered: bool = False):
+        from docx import Document
+        from docx.oxml.ns import qn
+        from docx.oxml import OxmlElement
+        doc = Document()
+        # 添加两个带 numPr 的段落
+        for i, text in enumerate(["item one", "item two"]):
+            para = doc.add_paragraph(text)
+            pPr = para._element.find(qn("w:pPr"))
+            if pPr is None:
+                pPr = OxmlElement("w:pPr")
+                para._element.insert(0, pPr)
+            numPr = OxmlElement("w:numPr")
+            pPr.append(numPr)
+            ilvl = OxmlElement("w:ilvl")
+            ilvl.set(qn("w:val"), "0")
+            numPr.append(ilvl)
+            numId_elem = OxmlElement("w:numId")
+            numId_elem.set(qn("w:val"), "1")
+            numPr.append(numId_elem)
+            if not para.runs:
+                para.add_run(text)
+        return doc
+    return _factory
+
+
+def get_para_xml_attr(para, qname: str, attr: str) -> str | None:
+    """从段落 pPr 中查找指定元素的属性值"""
+    from docx.oxml.ns import qn as _qn
+    pPr = para._element.find(_qn("w:pPr"))
+    if pPr is None:
+        return None
+    elem = pPr.find(_qn(qname))
+    if elem is None:
+        return None
+    return elem.get(_qn(attr))
+
+
+def get_run_rpr_elem(para, tag: str):
+    """获取段落第一个 run 的 rPr 中指定 tag 的元素"""
+    from docx.oxml.ns import qn as _qn
+    if not para.runs:
+        return None
+    rPr = para.runs[0]._element.find(_qn("w:rPr"))
+    if rPr is None:
+        return None
+    return rPr.find(_qn(tag))
+
+
+@pytest.fixture
+def docx_xml_helpers():
+    """提供 docx XML 查询辅助函数"""
+    return {
+        "get_para_xml_attr": get_para_xml_attr,
+        "get_run_rpr_elem": get_run_rpr_elem,
+    }
 
 
 @pytest.fixture
@@ -237,7 +364,7 @@ def mock_pandoc_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
         return False
 
     monkeypatch.setattr(
-        "app.services.export_service.ExportService._check_tool",
+        "app.services.export.tools.ToolChecker.check_tool",
         mock_check,
     )
 
@@ -245,13 +372,6 @@ def mock_pandoc_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture
 def mock_pandoc_success(monkeypatch: pytest.MonkeyPatch) -> None:
     """Mock pandoc 执行成功"""
-    async def mock_run(*args, **kwargs):
-        return AsyncMock(
-            returncode=0,
-            stdout=b"<!DOCTYPE html><html><body><p>Test content</p></body></html>",
-            stderr=b"",
-        )
-
     mock_result = AsyncMock()
     mock_result.returncode = 0
     mock_result.stdout = b"<!DOCTYPE html><html><body><p>Test content</p></body></html>"
@@ -261,7 +381,7 @@ def mock_pandoc_success(monkeypatch: pytest.MonkeyPatch) -> None:
         return mock_result
 
     monkeypatch.setattr(
-        "app.services.export_service.asyncio.create_subprocess_exec",
+        "app.services.export.tools.asyncio.create_subprocess_exec",
         mock_run_cmd,
     )
 
@@ -278,6 +398,6 @@ def mock_pandoc_failure(monkeypatch: pytest.MonkeyPatch) -> None:
         return mock_result
 
     monkeypatch.setattr(
-        "app.services.export_service.asyncio.create_subprocess_exec",
+        "app.services.export.tools.asyncio.create_subprocess_exec",
         mock_run_cmd,
     )

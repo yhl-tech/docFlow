@@ -14,6 +14,8 @@ interface EditorDebugInfo {
   paragraphStyles: any
   tableStyles: any
   cssVariables: Record<string, string>
+  tableCssVariables: Record<string, string>  // 表格相关的 CSS 变量
+  allCssVariables: Record<string, string>     // 所有 CSS 变量
 }
 
 // 监听编辑器配置变化的 hook
@@ -28,6 +30,22 @@ export function useEditorDebug(onUpdate?: (info: EditorDebugInfo) => void) {
         ? state.draftTemplateConfig 
         : state.templateBinding?.configSnapshot ?? null
 
+      // 获取 .tpl-paper 容器上的 CSS 变量
+      const tplPaper = document.querySelector('.tpl-paper') as HTMLElement | null
+      const allCssVars: Record<string, string> = {}
+      const tableCssVars: Record<string, string> = {}
+      
+      if (tplPaper) {
+        const style = tplPaper.style
+        for (const prop of style) {
+          const value = style.getPropertyValue(prop)
+          allCssVars[prop] = value
+          if (prop.startsWith('--tpl-table')) {
+            tableCssVars[prop] = value
+          }
+        }
+      }
+
       const info: EditorDebugInfo = {
         previewConfig,
         draftTemplateConfig: state.draftTemplateConfig,
@@ -38,7 +56,9 @@ export function useEditorDebug(onUpdate?: (info: EditorDebugInfo) => void) {
         layout: previewConfig?.layout,
         paragraphStyles: previewConfig?.paragraphStyles,
         tableStyles: previewConfig?.tableStyles,
-        cssVariables: {},
+        cssVariables: allCssVars,
+        tableCssVariables: tableCssVars,
+        allCssVariables: allCssVars,
       }
 
       const serialized = JSON.stringify(info)

@@ -4,6 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Any
 
 from app.services.export_service import ExportService
+from app.services.export.bindings import StyleBindings
+from app.services.export.css_generator import CssGenerator
 
 
 class TestExportServiceInit:
@@ -31,12 +33,9 @@ class TestExportServiceInit:
 class TestBindingStyles:
     """TemplateBinding 样式提取测试"""
 
-    def test_binding_styles_extracts_from_snapshot(
-        self, sample_template_binding: dict[str, Any]
-    ):
+    def test_binding_styles_extracts_from_snapshot(self, sample_template_binding: dict[str, Any]):
         """TemplateBinding.configSnapshot.styles 应被正确提取"""
-        svc = ExportService()
-        styles = svc._binding_styles(sample_template_binding)
+        styles = StyleBindings.get_styles(sample_template_binding)
 
         assert "body" in styles
         assert styles["body"]["fontFamily"] == "FangSong_GB2312"
@@ -44,17 +43,13 @@ class TestBindingStyles:
         assert styles["heading_1"]["bold"] is True
         assert styles["heading_1"]["fontFamily"] == "SimHei"
 
-    def test_binding_styles_fallback_to_default(self):
-        """无 snapshot 时应返回默认样式"""
-        svc = ExportService()
-        styles = svc._binding_styles(None)
-
-        assert "body" in styles
-        assert styles["body"]["fontFamily"] == "SimSun"
-        assert styles["body"]["fontSizePt"] == 16
+    def test_binding_styles_fallback_to_empty(self):
+        """无 snapshot 时应返回空字典"""
+        styles = StyleBindings.get_styles(None)
+        assert styles == {}
 
     def test_binding_styles_handles_partial_config(self):
-        """部分配置应正确合并"""
+        """部分配置应正确提取"""
         partial_binding = {
             "templateId": "test",
             "appliedAt": "2026-05-02T00:00:00Z",
@@ -65,24 +60,18 @@ class TestBindingStyles:
                 "layout": {},
             }
         }
-        svc = ExportService()
-        styles = svc._binding_styles(partial_binding)
+        styles = StyleBindings.get_styles(partial_binding)
 
         assert styles["body"]["fontFamily"] == "SimHei"
         assert styles["body"]["fontSizePt"] == 18
-        # 其他样式应有默认值
-        assert "heading_1" in styles
 
 
 class TestBindingLayout:
     """TemplateBinding 布局提取测试"""
 
-    def test_binding_layout_extracts_from_snapshot(
-        self, sample_template_binding: dict[str, Any]
-    ):
+    def test_binding_layout_extracts_from_snapshot(self, sample_template_binding: dict[str, Any]):
         """Layout 应从 snapshot 正确提取"""
-        svc = ExportService()
-        layout = svc._binding_layout(sample_template_binding)
+        layout = StyleBindings.get_layout(sample_template_binding)
 
         assert layout["paperSize"] == "A4"
         assert layout["marginTopMm"] == 37
@@ -90,17 +79,13 @@ class TestBindingLayout:
         assert layout["marginLeftMm"] == 28
         assert layout["marginRightMm"] == 26
 
-    def test_binding_layout_fallback_to_default(self):
-        """无 layout 时应返回默认值"""
-        svc = ExportService()
-        layout = svc._binding_layout(None)
-
-        assert layout["paperSize"] == "A4"
-        assert layout["marginTopMm"] == 25
-        assert layout["marginBottomMm"] == 25
+    def test_binding_layout_fallback_to_empty(self):
+        """无 layout 时应返回空字典"""
+        layout = StyleBindings.get_layout(None)
+        assert layout == {}
 
     def test_binding_layout_partial_config(self):
-        """部分布局配置应正确填充"""
+        """部分布局配置应正确提取"""
         partial_binding = {
             "templateId": "test",
             "appliedAt": "2026-05-02T00:00:00Z",
@@ -109,148 +94,42 @@ class TestBindingLayout:
                 "layout": {"paperSize": "B5", "marginTopMm": 30}
             }
         }
-        svc = ExportService()
-        layout = svc._binding_layout(partial_binding)
+        layout = StyleBindings.get_layout(partial_binding)
 
         assert layout["paperSize"] == "B5"
         assert layout["marginTopMm"] == 30
-        # 其他字段应有默认值
-        assert layout["marginBottomMm"] > 0
 
 
 class TestPageSize:
     """页面尺寸测试"""
 
-    def test_resolve_page_size_a4(self):
-        """A4 尺寸应为 (210, 297)"""
-        svc = ExportService()
-        result = svc._resolve_page_size("A4", None)
-        assert result == (210, 297)
+    def test_get_page_size_from_param(self):
+        """参数指定尺寸时应返回该尺寸"""
+        result = StyleBindings.get_page_size("A4", None)
+        assert result == "A4"
 
-    def test_resolve_page_size_b5(self):
-        """B5 尺寸应为 (176, 250)"""
-        svc = ExportService()
-        result = svc._resolve_page_size("B5", None)
-        assert result == (176, 250)
+    def test_get_page_size_from_binding(self):
+        """从绑定配置读取尺寸"""
+        binding = {
+            "configSnapshot": {
+                "layout": {"paperSize": "Letter"}
+            }
+        }
+        result = StyleBindings.get_page_size("default", binding)
+        assert result == "Letter"
 
-    def test_resolve_page_size_16k(self):
-        """16K 尺寸应为 (184, 260)"""
-        svc = ExportService()
-        result = svc._resolve_page_size("16K", None)
-        assert result == (184, 260)
-
-    def test_resolve_page_size_letter(self):
-        """Letter 尺寸应为 (216, 279)"""
-        svc = ExportService()
-        result = svc._resolve_page_size("Letter", None)
-        assert result == (216, 279)
-
-    def test_resolve_page_size_custom(self):
-        """自定义尺寸应正确解析"""
-        svc = ExportService()
-        result = svc._resolve_page_size("Custom", (300, 400))
-        assert result == (300, 400)
-
-    def test_resolve_page_size_unknown_with_fallback(self):
-        """未知尺寸有 fallback 时使用 fallback"""
-        svc = ExportService()
-        result = svc._resolve_page_size("Unknown", (100, 200))
-        assert result == (100, 200)
-
-    def test_resolve_page_size_unknown_without_fallback(self):
-        """未知尺寸无 fallback 时返回 A4"""
-        svc = ExportService()
-        result = svc._resolve_page_size("Unknown", None)
-        assert result == (210, 297)
-
-
-class TestStyleGeneration:
-    """样式生成测试"""
-
-    def test_generate_docx_styles_basic(
-        self, sample_styles: dict[str, Any]
-    ):
-        """基础样式生成测试"""
-        svc = ExportService()
-        styles = svc._generate_docx_styles(sample_styles)
-
-        assert isinstance(styles, dict)
-        assert "body" in styles
-        assert "heading_1" in styles
-
-    def test_generate_docx_styles_with_font(
-        self, sample_styles: dict[str, Any]
-    ):
-        """样式应包含字体信息"""
-        svc = ExportService()
-        styles = svc._generate_docx_styles(sample_styles)
-
-        body_style = styles["body"]
-        assert body_style.font.name == "FangSong_GB2312"
-        assert body_style.font.size.pt == 16
-
-    def test_generate_docx_styles_with_alignment(
-        self, sample_styles: dict[str, Any]
-    ):
-        """样式应包含对齐方式"""
-        svc = ExportService()
-        styles = svc._generate_docx_styles(sample_styles)
-
-        # body 应该是两端对齐
-        assert styles["body"].paragraph_format.alignment is not None
-
-
-class TestMarkdownValidation:
-    """Markdown 内容验证测试"""
-
-    def test_validate_markdown_empty(self):
-        """空内容应返回错误"""
-        svc = ExportService()
-        is_valid, error = svc._validate_markdown("")
-        assert is_valid is False
-        assert error is not None
-
-    def test_validate_markdown_valid(self, sample_markdown: str):
-        """有效内容应通过验证"""
-        svc = ExportService()
-        is_valid, error = svc._validate_markdown(sample_markdown)
-        assert is_valid is True
-        assert error is None
-
-    def test_validate_markdown_too_long(self):
-        """超长内容应返回错误"""
-        svc = ExportService()
-        long_content = "# Title\n\n" + "x" * 100000
-        is_valid, error = svc._validate_markdown(long_content)
-        assert is_valid is False
-        assert "超长" in error
-
-
-class TestContentLength:
-    """内容长度限制测试"""
-
-    def test_content_length_limit(self):
-        """内容长度限制应为 50000"""
-        svc = ExportService()
-        assert svc.CONTENT_MAX_LENGTH == 50000
-
-    def test_content_within_limit(self, sample_markdown: str):
-        """正常长度内容应通过"""
-        svc = ExportService()
-        assert len(sample_markdown) < svc.CONTENT_MAX_LENGTH
-        is_valid, _ = svc._validate_markdown(sample_markdown)
-        assert is_valid is True
+    def test_get_page_size_fallback_to_a4(self):
+        """无配置时返回默认 A4"""
+        result = StyleBindings.get_page_size("default", None)
+        assert result == "A4"
 
 
 class TestBindingHeadingStyles:
     """headingStyles 提取测试"""
 
-    def test_binding_heading_styles_extracts_h1_to_h6(
-        self, sample_heading_styles_binding: dict[str, Any]
-    ):
+    def test_binding_heading_styles_extracts_h1_to_h6(self, sample_heading_styles_binding: dict[str, Any]):
         """headingStyles.h1~h6 应被正确提取"""
-        svc = ExportService()
-        hs = svc._binding_heading_styles(sample_heading_styles_binding)
+        hs = StyleBindings.get_heading_styles(sample_heading_styles_binding)
         assert "h1" in hs
         assert hs["h1"]["font"]["fontFamily"] == "SimHei"
         assert hs["h1"]["font"]["fontSizePt"] == 16
@@ -260,8 +139,8 @@ class TestBindingHeadingStyles:
 
     def test_binding_heading_styles_fallback(self):
         """无 headingStyles 时返回空 dict"""
-        assert ExportService._binding_heading_styles(None) == {}
-        assert ExportService._binding_heading_styles({}) == {}
+        assert StyleBindings.get_heading_styles(None) == {}
+        assert StyleBindings.get_heading_styles({}) == {}
 
     def test_binding_heading_styles_partial_config(self):
         """仅配置 h1 时，h2~h6 不应存在"""
@@ -274,7 +153,7 @@ class TestBindingHeadingStyles:
                 }
             },
         }
-        hs = ExportService._binding_heading_styles(partial_binding)
+        hs = StyleBindings.get_heading_styles(partial_binding)
         assert "h1" in hs
         assert "h2" not in hs
 
@@ -282,27 +161,23 @@ class TestBindingHeadingStyles:
 class TestBindingParagraphStyles:
     """paragraphStyles 提取测试"""
 
-    def test_binding_paragraph_styles_extracts_align(
-        self, sample_heading_styles_binding: dict[str, Any]
-    ):
+    def test_binding_paragraph_styles_extracts_align(self, sample_heading_styles_binding: dict[str, Any]):
         """paragraphStyles 应被正确提取"""
-        svc = ExportService()
-        ps = svc._binding_paragraph_styles(sample_heading_styles_binding)
+        ps = StyleBindings.get_paragraph_styles(sample_heading_styles_binding)
         assert ps["align"] == "justify"
         assert ps["lineHeight"] == 1.8
         assert ps["spacingBeforePt"] == 0
 
     def test_binding_paragraph_styles_fallback(self):
         """无 paragraphStyles 时返回空 dict"""
-        assert ExportService._binding_paragraph_styles(None) == {}
+        assert StyleBindings.get_paragraph_styles(None) == {}
 
 
 class TestTableBorderCssGeneration:
     """表格边框 CSS 生成测试"""
 
     def test_border_style_double_generates_correct_css(self):
-        """tableStyles.border.style='double' 时，CSS 应包含 border-style: double"""
-        svc = ExportService()
+        """tableStyles.border.style='double' 时，CSS 应包含 double 关键字"""
         binding = {
             "templateId": "test",
             "appliedAt": "2026-05-02T00:00:00Z",
@@ -316,14 +191,14 @@ class TestTableBorderCssGeneration:
                 }
             },
         }
-        css = svc._get_table_css(binding)
-        assert "border-style: double" in css or "border-style:double" in css
-        assert "border-color: #000000" in css
-        assert "border-width: 1.0pt" in css or "border-width:1.0pt" in css
+        css = CssGenerator.get_table_css(binding)
+        # CSS 输出为 shorthand 格式：border: 1.0pt double #000000
+        assert "double" in css
+        assert "#000000" in css
+        assert "1.0pt" in css
 
     def test_border_width_pt_generates_border_width(self):
-        """tableStyles.border.widthPt 应生成 border-width CSS"""
-        svc = ExportService()
+        """tableStyles.border.widthPt 应生成对应宽度的 CSS"""
         binding = {
             "templateId": "test",
             "appliedAt": "2026-05-02T00:00:00Z",
@@ -336,25 +211,40 @@ class TestTableBorderCssGeneration:
                 }
             },
         }
-        css = svc._get_table_css(binding)
-        assert "border-width: 2.0pt" in css or "border-width:2.0pt" in css
+        css = CssGenerator.get_table_css(binding)
+        # CSS 输出为 shorthand 格式：border: 2.0pt solid #000000
+        assert "2.0pt" in css
 
-    def test_inside_horizontal_border_false(self):
-        """insideHorizontalBorder=false 时，应生成 collapsed 边框"""
-        svc = ExportService()
+    def test_table_alignment_right_generates_correct_css(self):
+        """tableAlignment='right' 时，CSS 应生成 margin-right: 0"""
         binding = {
             "templateId": "test",
             "appliedAt": "2026-05-02T00:00:00Z",
             "configSnapshot": {
                 "tableStyles": {
-                    "border": {
-                        "insideHorizontalBorder": False,
-                    }
+                    "tableAlignment": "right",
+                    "tableWidth": 50,
                 }
             },
         }
-        css = svc._get_table_css(binding)
-        # 目前暂未实现 insideHorizontalBorder，等实现后此测试应通过
+        css = CssGenerator.get_table_css(binding)
+        assert "margin-right: 0" in css
+        assert "width: 50%" in css
+
+    def test_table_alignment_center_generates_correct_css(self):
+        """tableAlignment='center' 时，CSS 应生成 margin-left/right: auto"""
+        binding = {
+            "templateId": "test",
+            "appliedAt": "2026-05-02T00:00:00Z",
+            "configSnapshot": {
+                "tableStyles": {
+                    "tableAlignment": "center",
+                }
+            },
+        }
+        css = CssGenerator.get_table_css(binding)
+        assert "margin-left: auto" in css
+        assert "margin-right: auto" in css
 
 
 class TestImageStyleCssGeneration:
@@ -362,36 +252,38 @@ class TestImageStyleCssGeneration:
 
     def test_border_width_pt_generates_css(self):
         """imageStyles.borderWidthPt 应生成对应 CSS"""
-        svc = ExportService()
         binding = {
             "templateId": "test",
             "appliedAt": "2026-05-02T00:00:00Z",
             "configSnapshot": {
                 "imageStyles": {
-                    "borderColor": "#FF0000",
-                    "borderWidthPt": 2,
+                    "border": {
+                        "showBorder": True,
+                        "color": "#FF0000",
+                        "widthPt": 2,
+                    }
                 }
             },
         }
-        css = svc._get_image_css(binding)
+        css = CssGenerator.get_image_css(binding)
         assert "border: 2pt solid #FF0000" in css or "border:2pt solid #FF0000" in css
 
-    def test_wrap_type_top_and_bottom_generates_css(self):
-        """wrapType='topAndBottom' 时生成正确 CSS"""
-        svc = ExportService()
+    def test_spacing_generates_css(self):
+        """图片间距应生成 CSS"""
         binding = {
             "templateId": "test",
             "appliedAt": "2026-05-02T00:00:00Z",
             "configSnapshot": {
                 "imageStyles": {
-                    "position": {"wrapType": "topAndBottom"}
+                    "spacing": {
+                        "marginTopCm": 1,
+                        "marginBottomCm": 0.5,
+                    }
                 }
             },
         }
-        css = svc._get_image_css(binding)
-        assert "display: block" in css
-        assert "margin-left: auto" in css
-        assert "margin-right: auto" in css
+        css = CssGenerator.get_image_css(binding)
+        assert "margin: 1cm" in css
 
 
 class TestCodeBlockCssGeneration:
@@ -399,7 +291,6 @@ class TestCodeBlockCssGeneration:
 
     def test_shading_fill_generates_background_color(self):
         """codeBlockStyles.shading.fill 应生成 background-color CSS"""
-        svc = ExportService()
         binding = {
             "templateId": "test",
             "appliedAt": "2026-05-02T00:00:00Z",
@@ -409,12 +300,11 @@ class TestCodeBlockCssGeneration:
                 }
             },
         }
-        css = svc._get_codeblock_css(binding)
+        css = CssGenerator.get_codeblock_css(binding)
         assert "background-color: #F5F5F5" in css or "background-color:#F5F5F5" in css
 
     def test_keyboard_style_generates_css(self):
         """codeBlockStyles.keyboardStyle 应生成正确 CSS"""
-        svc = ExportService()
         binding = {
             "templateId": "test",
             "appliedAt": "2026-05-02T00:00:00Z",
@@ -427,6 +317,136 @@ class TestCodeBlockCssGeneration:
                 }
             },
         }
-        css = svc._get_codeblock_css(binding)
+        css = CssGenerator.get_codeblock_css(binding)
         assert "color: #333333" in css or "color:#333333" in css
         assert "background-color: #FAFAFA" in css or "background-color:#FAFAFA" in css
+
+
+class TestFixEmptyTableCells:
+    """_fix_empty_table_cells 集成链路测试"""
+
+    def _fix(self, md: str) -> str:
+        return ExportService._fix_empty_table_cells(md)
+
+    def test_empty_header_row_filled_with_nbsp(self):
+        """完全空的表头行应被 NBSP 填充，防止 pandoc 忽略该行"""
+        md = "|  |  |  |\n| --- | --- | --- |\n|  | data |  |\n"
+        result = self._fix(md)
+        lines = result.split('\n')
+        header = lines[0]
+        assert '\xa0' in header, "空 header 单元格必须含 NBSP"
+
+    def test_separator_row_not_modified(self):
+        """分隔行不应被修改"""
+        md = "|  |  |\n| --- | --- |\n|  |  |\n"
+        result = self._fix(md)
+        assert '| --- | --- |' in result
+
+    def test_data_with_content_preserved(self):
+        """有内容的单元格不应被修改"""
+        md = "| a | b |\n| --- | --- |\n| hello | world |\n"
+        result = self._fix(md)
+        assert '| hello | world |' in result or 'hello' in result
+
+    def test_nbsp_cleared_in_postprocess(self):
+        """postprocess 阶段 NBSP 占位符应被清除，不出现在最终单元格内容中"""
+        import tempfile, subprocess, os
+        from docx import Document
+
+        pandoc_candidates = [
+            r"C:\Users\yuanhl\AppData\Local\Pandoc\pandoc.exe",
+            r"C:\Program Files\Pandoc\pandoc.exe",
+            "pandoc",
+        ]
+        pandoc_bin = next((p for p in pandoc_candidates if os.path.exists(p)), None)
+        if pandoc_bin is None:
+            import shutil
+            pandoc_bin = shutil.which("pandoc")
+        if pandoc_bin is None:
+            pytest.skip("pandoc 未安装，跳过集成测试")
+
+        md = "|  |  |  |  |  |  |\n| --- | --- | --- | --- | --- | --- |\n|  |  | DATA |  |  |  |\n|  |  |  |  |  |  |\n"
+        fixed = self._fix(md)
+
+        with tempfile.TemporaryDirectory() as d:
+            inp = os.path.join(d, "input.md")
+            out = os.path.join(d, "output.docx")
+            with open(inp, "w", encoding="utf-8-sig") as f:
+                f.write(fixed)
+            subprocess.run(
+                [pandoc_bin, "--from=markdown+raw_html", "--to=docx", "-o", out, inp],
+                check=True, capture_output=True,
+            )
+            doc = Document(out)
+
+            # 模拟 postprocess 中的 NBSP 清除逻辑
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        for para in cell.paragraphs:
+                            for run in para.runs:
+                                if run.text == '\xa0':
+                                    run.text = ''
+
+            # 验证：所有单元格不含 NBSP，DATA 在正确位置
+            data_found = False
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        assert '\xa0' not in cell.text, f"单元格仍含 NBSP: {repr(cell.text)}"
+                        if 'DATA' in cell.text:
+                            data_found = True
+            assert data_found, "DATA 内容应出现在表格中"
+
+    def test_row_count_preserved(self):
+        """fix 后再经 pandoc 转换，行数应与原始 markdown 一致（header 不被忽略）"""
+        import tempfile, subprocess, os
+        from docx import Document
+
+        pandoc_candidates = [
+            r"C:\Users\yuanhl\AppData\Local\Pandoc\pandoc.exe",
+            r"C:\Program Files\Pandoc\pandoc.exe",
+            "pandoc",
+        ]
+        pandoc_bin = next((p for p in pandoc_candidates if os.path.exists(p)), None)
+        if pandoc_bin is None:
+            import shutil
+            pandoc_bin = shutil.which("pandoc")
+        if pandoc_bin is None:
+            pytest.skip("pandoc 未安装，跳过集成测试")
+
+        # 1 header row + 2 data rows = 3 rows total
+        md = "|  |  |  |\n| --- | --- | --- |\n|  | cell |  |\n|  |  |  |\n"
+        fixed = self._fix(md)
+
+        with tempfile.TemporaryDirectory() as d:
+            inp = os.path.join(d, "input.md")
+            out = os.path.join(d, "output.docx")
+            with open(inp, "w", encoding="utf-8-sig") as f:
+                f.write(fixed)
+            subprocess.run(
+                [pandoc_bin, "--from=markdown+raw_html", "--to=docx", "-o", out, inp],
+                check=True, capture_output=True,
+            )
+            doc = Document(out)
+            assert doc.tables, "应生成至少一个表格"
+            assert len(doc.tables[0].rows) == 3, f"期望3行，实际{len(doc.tables[0].rows)}行（空 header 行被 pandoc 忽略）"
+
+
+class TestStyleBindings:
+    """StyleBindings 工具方法测试"""
+
+    def test_font_display_name(self):
+        """字体 ID 应转换为显示名称"""
+        assert StyleBindings.font_display_name("FangSong_GB2312") == "仿宋_GB2312"
+        assert StyleBindings.font_display_name("SimHei") == "黑体"
+        assert StyleBindings.font_display_name("KaiTi_GB2312") == "楷体_GB2312"
+        assert StyleBindings.font_display_name(None) == "微软雅黑"
+        assert StyleBindings.font_display_name("UnknownFont") == "UnknownFont"
+
+    def test_get_template_id(self):
+        """模板 ID 获取"""
+        assert StyleBindings.get_template_id("custom", None) == "custom"
+        binding = {"templateId": "from-binding"}
+        assert StyleBindings.get_template_id("default", binding) == "from-binding"
+        assert StyleBindings.get_template_id("default", None) == "default"

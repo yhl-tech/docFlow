@@ -1,0 +1,141 @@
+{
+  "jira": {
+    "base_url": "https://your-company.atlassian.net",
+    "project_key": "DOCFLOW",
+    "api_version": "3",
+    "username": "${JIRA_USERNAME}",
+    "api_token": "${JIRA_API_TOKEN}"
+  },
+  "confluence": {
+    "base_url": "https://your-company.atlassian.net",
+    "space_key": "DOCFLOW",
+    "username": "${CONFLUENCE_USERNAME}",
+    "api_token": "${CONFLUENCE_API_TOKEN}"
+  },
+  "github": {
+    "owner": "yhl-tech",
+    "repo": "docFlow",
+    "default_branch": "main",
+    "feature_branch_prefix": "feat/",
+    "fix_branch_prefix": "fix/"
+  },
+  "sonarqube": {
+    "url": "${SONAR_URL}",
+    "token": "${SONAR_TOKEN}",
+    "project_key": "docflow"
+  },
+  "jenkins": {
+    "url": "${JENKINS_URL}",
+    "job_name": "docflow-pipeline",
+    "username": "${JENKINS_USERNAME}",
+    "api_token": "${JENKINS_API_TOKEN}"
+  },
+  "task_generation": {
+    "default_priority": 3,
+    "auto_estimate": true,
+    "frontend_keywords": [
+      "UI",
+      "component",
+      "page",
+      "style",
+      "layout",
+      "design",
+      "responsive",
+      "animation"
+    ],
+    "backend_keywords": [
+      "API",
+      "database",
+      "service",
+      "endpoint",
+      "authentication",
+      "authorization",
+      "validation"
+    ],
+    "fullstack_keywords": [
+      "feature",
+      "integration",
+      "workflow",
+      "export",
+      "import",
+      "sync"
+    ]
+  },
+  "testing": {
+    "frontend": {
+      "command": "npm run test:ci",
+      "coverage_threshold": 80
+    },
+    "backend": {
+      "command": "pytest tests/ -v --cov=app",
+      "coverage_threshold": 70
+    },
+    "e2e": {
+      "command": "npm run test:e2e",
+      "browsers": ["chromium", "firefox"]
+    }
+  },
+  "code_review": {
+    "auto_assign": true,
+    "required_approvals": 1,
+    "review_checklist": [
+      "代码符合项目规范",
+      "测试覆盖率达标",
+      "无安全漏洞",
+      "性能无明显下降",
+      "文档已更新"
+    ]
+  },
+  "deployment": {
+    "staging": {
+      "auto_deploy": true,
+      "branch": "develop",
+      "url": "https://staging.docflow.example.com"
+    },
+    "production": {
+      "auto_deploy": false,
+      "branch": "main",
+      "url": "https://docflow.example.com",
+      "required_approvals": 2
+    }
+  },
+  "notifications": {
+    "slack": {
+      "enabled": true,
+      "webhook_url": "${SLACK_WEBHOOK_URL}",
+      "channel": "#docflow-dev"
+    },
+    "email": {
+      "enabled": false,
+      "recipients": ["team@example.com"]
+    }
+  },
+  "commit_convention": {
+    "types": [
+      "feat",
+      "fix",
+      "docs",
+      "style",
+      "refactor",
+      "test",
+      "chore",
+      "perf",
+      "ci",
+      "build"
+    ],
+    "scopes": [
+      "frontend",
+      "backend",
+      "auth",
+      "editor",
+      "template",
+      "export",
+      "ai",
+      "payment",
+      "docs",
+      "config"
+    ],
+    "subject_max_length": 100,
+    "body_max_length": 500
+  }
+}

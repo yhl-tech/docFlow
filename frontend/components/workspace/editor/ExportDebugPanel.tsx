@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { X, ChevronDown, ChevronRight, Copy, Check, Monitor, Box, ImageIcon, Ruler, Info } from 'lucide-react'
+import { X, ChevronDown, ChevronRight, Copy, Check, Monitor, Box, ImageIcon, Ruler, Info, Terminal } from 'lucide-react'
 import { useEditorDebug } from '@/hooks/useEditorDebug'
+import { useEditorStore } from '@/store/editorStore'
 
 interface DebugInfo {
   timestamp: string
@@ -20,11 +21,31 @@ interface DebugInfo {
   response?: any
 }
 
+// 表格插入日志
+interface TableInsertLog {
+  timestamp: string
+  tableNumber: number
+  tableNumberingEnabled: boolean
+  tableNumberingConfig: any
+  prefix: string
+  suffix: string
+  rows: number
+  cols: number
+  tableStyles: any
+  configSource: string
+  configSnapshot: {
+    hasTableStyles: boolean
+    tableStylesKeys: string[]
+    hasTableNumbering: boolean
+  } | null
+}
+
 interface EditorDebugInfo {
   imageStyles?: any
   headingStyles?: any
   layout?: any
   paragraphStyles?: any
+  tableStyles?: any
   templatePanelOpen?: boolean
   previewConfig?: any
 }
@@ -245,13 +266,93 @@ function JsonTree({ data, depth = 0 }: { data: any; depth?: number }) {
 // 主调试面板组件
 export function ExportDebugPanel() {
   const [isOpen, setIsOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<'editor' | 'export' | 'elements'>('editor')
+  const [activeTab, setActiveTab] = useState<'editor' | 'export' | 'elements' | 'logs'>('editor')
   const [history, setHistory] = useState<DebugInfo[]>([])
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [copied, setCopied] = useState(false)
   const [editorDebug, setEditorDebug] = useState<EditorDebugInfo | null>(null)
   const [elementTree, setElementTree] = useState<EditorElementInfo | null>(null)
   const [selectedImage, setSelectedImage] = useState<HTMLElement | null>(null)
+  const [tableInsertLogs, setTableInsertLogs] = useState<TableInsertLog[]>([])
+  const [allLogs, setAllLogs] = useState<string[]>([]) // 所有控制台日志
+
+  // 捕获完整的编辑器快照
+  const captureEditorSnapshot = useCallback(() => {
+    const snapshot: any = {
+      timestamp: new Date().toLocaleString(),
+      editorDebug: editorDebug,
+      tableInsertLogs: tableInsertLogs,
+      allLogs: allLogs,
+      elementTree: null,
+      cssVariables: {},
+      tableCssVariables: {},
+      allCssVariables: {},
+      computedStyles: {},
+      tables: [],
+    }
+
+    if (typeof window === 'undefined') return snapshot
+
+    const editorRoot = document.querySelector('#editor-root')
+    if (editorRoot) {
+      const extractElementInfo = (el: Element, depth: number): any => {
+        if (depth > 3) return { tag: el.tagName.toLowerCase(), truncated: true }
+        const computed = window.getComputedStyle(el as HTMLElement)
+        const result: any = {
+          tag: el.tagName.toLowerCase(),
+          id: el.id || undefined,
+          computed: {
+            width: computed.width,
+            height: computed.height,
+            maxWidth: computed.maxWidth,
+            display: computed.display,
+          },
+          children: [],
+        }
+
+        if (el.tagName === 'TABLE') {
+          const rows = el.querySelectorAll('tr')
+          result.tableInfo = { rows: rows.length }
+          snapshot.tables.push(result)
+        }
+
+        Array.from(el.children).slice(0, 10).forEach((child: Element) => {
+          result.children.push(extractElementInfo(child, depth + 1))
+        })
+
+        return result
+      }
+
+      snapshot.elementTree = extractElementInfo(editorRoot, 0)
+
+      // 获取 .tpl-paper 元素的内联 CSS 变量（通过 style 属性设置）
+      const paper = document.querySelector('.tpl-paper') as HTMLElement | null
+      if (paper) {
+        const allVars: Record<string, string> = {}
+        const tableVars: Record<string, string> = {}
+        const inlineStyle = paper.style
+        for (const prop of inlineStyle) {
+          const value = inlineStyle.getPropertyValue(prop)
+          allVars[prop] = value
+          if (prop.startsWith('--tpl-table')) {
+            tableVars[prop] = value
+          }
+        }
+        snapshot.cssVariables = allVars
+        snapshot.tableCssVariables = tableVars
+        snapshot.allCssVariables = allVars
+        
+        // 获取计算样式
+        const computed = window.getComputedStyle(paper)
+        snapshot.computedStyles['tpl-paper'] = {
+          width: computed.width,
+          maxWidth: computed.maxWidth,
+        }
+      }
+    }
+
+    return snapshot
+  }, [editorDebug, tableInsertLogs, allLogs])
 
   // 扫描编辑器元素结构
   const scanEditorStructure = useCallback(() => {
@@ -331,6 +432,126 @@ export function ExportDebugPanel() {
           }
         })
       })
+
+      // 查找所有表格并打印详细样式信息
+      const tables = target.querySelectorAll('table')
+      console.log('[Debug] 扫描到表格:', tables.length)
+      tables.forEach((table, i) => {
+        const tableEl = table as HTMLElement
+        const computed = window.getComputedStyle(tableEl)
+        
+        // 查找表头和数据行单元格
+        const headers = tableEl.querySelectorAll('th')
+        const cells = tableEl.querySelectorAll('td')
+        
+        // 获取 tpl-paper 容器的 CSS 变量
+        const tplPaper = tableEl.closest('.tpl-paper') as HTMLElement | null
+        const tplVars: Record<string, string> = {}
+        if (tplPaper) {
+          const paperStyle = tplPaper.style
+          for (const prop of paperStyle) {
+            if (prop.startsWith('--tpl-table')) {
+              tplVars[prop] = paperStyle.getPropertyValue(prop)
+            }
+          }
+        }
+        
+        console.log(`[Debug] === 表格${i + 1} 详情 ===`)
+        console.log(`[Debug] 表格基础样式:`, {
+          width: computed.width,
+          maxWidth: computed.maxWidth,
+          marginLeft: computed.marginLeft,
+          marginRight: computed.marginRight,
+          borderCollapse: computed.borderCollapse,
+        })
+        
+        // 表头单元格样式
+        if (headers.length > 0) {
+          const headerComputed = window.getComputedStyle(headers[0] as HTMLElement)
+          console.log(`[Debug] 表头单元格[0]样式:`, {
+            fontWeight: headerComputed.fontWeight,
+            fontFamily: headerComputed.fontFamily,
+            fontSize: headerComputed.fontSize,
+            color: headerComputed.color,
+            fontStyle: headerComputed.fontStyle,
+            textDecoration: headerComputed.textDecoration,
+            backgroundColor: headerComputed.backgroundColor,
+          })
+          
+          // 表头内段落样式
+          const headerP = headers[0].querySelector('p')
+          if (headerP) {
+            const headerPComputed = window.getComputedStyle(headerP)
+            console.log(`[Debug] 表头段落样式:`, {
+              fontWeight: headerPComputed.fontWeight,
+              fontFamily: headerPComputed.fontFamily,
+              fontSize: headerPComputed.fontSize,
+              color: headerPComputed.color,
+            })
+          }
+        }
+        
+        // 数据行单元格样式
+        if (cells.length > 0) {
+          const cellComputed = window.getComputedStyle(cells[0] as HTMLElement)
+          console.log(`[Debug] 数据行单元格[0]样式:`, {
+            fontWeight: cellComputed.fontWeight,
+            fontFamily: cellComputed.fontFamily,
+            fontSize: cellComputed.fontSize,
+            color: cellComputed.color,
+            fontStyle: cellComputed.fontStyle,
+            textDecoration: cellComputed.textDecoration,
+            backgroundColor: cellComputed.backgroundColor,
+            textAlign: cellComputed.textAlign,
+            verticalAlign: cellComputed.verticalAlign,
+          })
+          
+          // 数据行内段落样式
+          const cellP = cells[0].querySelector('p')
+          if (cellP) {
+            const cellPComputed = window.getComputedStyle(cellP)
+            console.log(`[Debug] 数据行段落样式:`, {
+              fontWeight: cellPComputed.fontWeight,
+              fontFamily: cellPComputed.fontFamily,
+              fontSize: cellPComputed.fontSize,
+              color: cellPComputed.color,
+              fontStyle: cellPComputed.fontStyle,
+              textDecoration: cellPComputed.textDecoration,
+            })
+          }
+        }
+        
+        // CSS 变量
+        console.log(`[Debug] tpl-paper CSS 变量 (表格相关):`, tplVars)
+        
+        // 表格 DOM 属性
+        console.log(`[Debug] 表格 DOM 属性:`, {
+          tableAlign: tableEl.getAttribute('data-table-align'),
+          tableWidth: tableEl.getAttribute('data-table-width'),
+          borderColor: tableEl.getAttribute('data-border-color'),
+          borderWidthPt: tableEl.getAttribute('data-border-width-pt'),
+          cellPadTop: tableEl.getAttribute('data-cell-pad-top'),
+          cellPadBottom: tableEl.getAttribute('data-cell-pad-bottom'),
+          cellPadLeft: tableEl.getAttribute('data-cell-pad-left'),
+          cellPadRight: tableEl.getAttribute('data-cell-pad-right'),
+          headerBg: tableEl.getAttribute('data-header-bg'),
+          headerBold: tableEl.getAttribute('data-header-bold'),
+          dataRowBg: tableEl.getAttribute('data-row-bg'),
+          dataRowBold: tableEl.getAttribute('data-row-bold'),
+        })
+      })
+      
+      // 打印 .tpl-paper 容器的所有 CSS 变量
+      const tplPaper2 = target.closest('.tpl-paper') as HTMLElement | null
+      if (tplPaper2) {
+        const allVars: Record<string, string> = {}
+        const paperStyle = tplPaper2.style
+        for (const prop of paperStyle) {
+          allVars[prop] = paperStyle.getPropertyValue(prop)
+        }
+        console.log('[Debug] .tpl-paper 所有 CSS 变量:', allVars)
+      }
+      
     } else {
       console.log('[Debug] 未找到编辑器元素')
     }
@@ -514,56 +735,127 @@ export function ExportDebugPanel() {
   // 监听控制台日志
   useEffect(() => {
     const originalLog = console.log
-    const handleLog = (...args: any[]) => {
-      originalLog.apply(console, args)
+    const originalError = console.error
+    const originalWarn = console.warn
 
-      // 检测导出相关的日志
-      const firstArg = args[0]
-      if (typeof firstArg === 'string' && firstArg.includes('[useExport]')) {
-        try {
-          const debugInfo: DebugInfo = {
-            timestamp: new Date().toLocaleTimeString(),
-            config: {},
-            requestPayload: args[1],
-          }
+    const captureLog = (type: 'log' | 'error' | 'warn', args: any[]) => {
+      const timestamp = new Date().toLocaleTimeString()
+      let logText = ''
 
-          // 解析日志数据
-          const data = args[1]
-          if (data) {
-            debugInfo.config = {
-              imageStyles: data.imageStyles_preview || data.imageStyles_binding,
-              headingStyles: data.fullPreviewConfig?.headingStyles,
-              layout: data.fullPreviewConfig?.layout,
-              tableStyles: data.fullPreviewConfig?.tableStyles,
+      try {
+        logText = args.map(arg => {
+          if (typeof arg === 'string') return arg
+          if (arg === null) return 'null'
+          if (arg === undefined) return 'undefined'
+          return JSON.stringify(arg, null, 2)
+        }).join(' ')
+
+        const logEntry = `[${timestamp}] [${type.toUpperCase()}] ${logText}`
+        setAllLogs(prev => [...prev.slice(-499), logEntry]) // 保留最近500条
+
+        // 同时处理特定类型的日志
+        const firstArg = args[0]
+        if (typeof firstArg === 'string') {
+          if (firstArg.includes('[insertTable]')) {
+            // 表格插入日志 - 更完善的捕获
+            try {
+              const tableData = args[1]
+              const currentState = useEditorStore.getState()
+              const previewConfig = currentState.getPreviewTemplateConfig()
+              
+              // 获取配置来源
+              const configSource = currentState.draftTemplateConfig 
+                ? 'draftTemplateConfig' 
+                : currentState.templateBinding 
+                  ? 'templateBinding' 
+                  : currentState.currentTemplate 
+                    ? 'currentTemplate' 
+                    : 'default'
+              
+              const tableNumbering = previewConfig?.tableStyles?.tableNumbering
+              
+              // 创建更完整的日志记录
+              const enhancedLog = {
+                timestamp,
+                tableNumber: tableData?.tableNumber ?? tableData?.newTableNumber ?? 1,
+                tableNumberingEnabled: tableNumbering?.enabled ?? false,
+                tableNumberingConfig: tableNumbering ?? null,
+                prefix: tableNumbering?.prefix ?? '表 ',
+                suffix: tableNumbering?.suffix ?? '  ',
+                rows: tableData?.rows ?? 0,
+                cols: tableData?.cols ?? 0,
+                tableStyles: previewConfig?.tableStyles ?? null,
+                configSource,
+                configSnapshot: previewConfig ? {
+                  hasTableStyles: !!previewConfig.tableStyles,
+                  tableStylesKeys: previewConfig.tableStyles ? Object.keys(previewConfig.tableStyles) : [],
+                  hasTableNumbering: !!previewConfig.tableStyles?.tableNumbering,
+                } : null,
+              }
+
+              setTableInsertLogs(prev => [...prev.slice(-19), enhancedLog])
+              
+              // 同时记录到 allLogs 用于完整快照
+              console.log('[DebugPanel] 捕获表格插入日志:', enhancedLog)
+            } catch (e) {
+              console.error('[DebugPanel] 捕获表格插入日志失败:', e)
             }
-            debugInfo.binding = data.fullBindingSnapshot ? {
-              templateId: data.templateId,
-              configSnapshot: data.fullBindingSnapshot,
-            } : undefined
           }
 
-          setHistory(prev => [debugInfo, ...prev.slice(0, 9)]) // 保留最近10条
-        } catch (e) {
-          // 忽略解析错误
+          if (firstArg.includes('[useExport]')) {
+            // 导出日志
+            try {
+              const debugInfo: DebugInfo = {
+                timestamp,
+                config: {},
+                requestPayload: args[1],
+              }
+              const data = args[1]
+              if (data) {
+                debugInfo.config = {
+                  imageStyles: data.imageStyles_preview || data.imageStyles_binding,
+                  headingStyles: data.fullPreviewConfig?.headingStyles,
+                  layout: data.fullPreviewConfig?.layout,
+                  tableStyles: data.fullPreviewConfig?.tableStyles,
+                }
+                debugInfo.binding = data.fullBindingSnapshot ? {
+                  templateId: data.templateId,
+                  configSnapshot: data.fullBindingSnapshot,
+                } : undefined
+              }
+              setHistory(prev => [debugInfo, ...prev.slice(0, 9)])
+            } catch (e) {}
+          }
         }
-      }
+      } catch (e) {}
     }
 
-    console.log = handleLog
+    console.log = (...args: any[]) => {
+      originalLog.apply(console, args)
+      captureLog('log', args)
+    }
+    console.error = (...args: any[]) => {
+      originalError.apply(console, args)
+      captureLog('error', args)
+    }
+    console.warn = (...args: any[]) => {
+      originalWarn.apply(console, args)
+      captureLog('warn', args)
+    }
+
     return () => {
       console.log = originalLog
+      console.error = originalError
+      console.warn = originalWarn
     }
   }, [])
 
   const current = history[selectedIndex]
 
   const copyToClipboard = () => {
-    let dataToCopy = ''
-
     if (activeTab === 'editor' && editorDebug) {
-      dataToCopy = JSON.stringify(editorDebug, null, 2)
+      navigator.clipboard.writeText(JSON.stringify(editorDebug, null, 2))
     } else if (activeTab === 'elements' && elementTree) {
-      // 复制元素树信息
       const extractInfo = (info: EditorElementInfo): any => ({
         tagName: info.tagName,
         className: info.className,
@@ -573,16 +865,52 @@ export function ExportDebugPanel() {
         computedStyles: info.computedStyles,
         children: info.children.map(extractInfo),
       })
-      dataToCopy = JSON.stringify(extractInfo(elementTree), null, 2)
+      navigator.clipboard.writeText(JSON.stringify(extractInfo(elementTree), null, 2))
     } else if (activeTab === 'export' && current) {
-      dataToCopy = JSON.stringify(current, null, 2)
+      navigator.clipboard.writeText(JSON.stringify(current, null, 2))
+    } else if (activeTab === 'logs') {
+      const snapshot = captureEditorSnapshot()
+      const cssVars = snapshot.cssVariables && Object.keys(snapshot.cssVariables).length > 0
+        ? Object.entries(snapshot.cssVariables).map(([k, v]) => k + ': ' + v).join('\n')
+        : '无'
+      const tableCssVars = snapshot.tableCssVariables && Object.keys(snapshot.tableCssVariables).length > 0
+        ? Object.entries(snapshot.tableCssVariables).map(([k, v]) => k + ': ' + v).join('\n')
+        : '无'
+      const tablesInfo = snapshot.tables.length > 0
+        ? snapshot.tables.map((t: any, i: number) => '表' + (i + 1) + ': ' + t.tableInfo.rows + '行').join('\n')
+        : '无'
+      const text = [
+        '=== 完整调试快照 ===',
+        '生成时间: ' + new Date().toLocaleString(),
+        '',
+        '--- 表格插入日志 ---',
+        ...tableInsertLogs.map(log => JSON.stringify(log, null, 2)),
+        '',
+        '--- 编辑器配置 ---',
+        editorDebug ? JSON.stringify(editorDebug, null, 2) : '无',
+        '',
+        '--- CSS 变量 (所有内联变量) ---',
+        cssVars,
+        '',
+        '--- 表格相关 CSS 变量 (--tpl-table-*) ---',
+        tableCssVars,
+        '',
+        '--- 关键元素计算样式 ---',
+        JSON.stringify(snapshot.computedStyles, null, 2),
+        '',
+        '--- 编辑器 DOM 结构 ---',
+        JSON.stringify(snapshot.elementTree, null, 2),
+        '',
+        '--- 表格详情 ---',
+        tablesInfo,
+        '',
+        '--- 所有控制台日志 ---',
+        ...allLogs,
+      ].join('\n')
+      navigator.clipboard.writeText(text)
     }
-
-    if (dataToCopy) {
-      navigator.clipboard.writeText(dataToCopy)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   if (!isOpen) {
@@ -676,6 +1004,20 @@ export function ExportDebugPanel() {
             <span className="rounded-full bg-slate-100 px-1.5 text-[10px]">{history.length}</span>
           )}
         </button>
+        <button
+          onClick={() => setActiveTab('logs')}
+          className={`flex flex-1 items-center justify-center gap-2 px-4 py-2 text-xs font-medium transition-colors ${
+            activeTab === 'logs'
+              ? 'border-b-2 border-blue-500 text-blue-600'
+              : 'text-slate-500 hover:text-slate-700'
+          }`}
+        >
+          <Terminal className="h-3.5 w-3.5" />
+          日志
+          {allLogs.length > 0 && (
+            <span className="rounded-full bg-green-100 px-1.5 text-[10px] text-green-700">{allLogs.length}</span>
+          )}
+        </button>
       </div>
 
       {/* 内容区 */}
@@ -741,6 +1083,16 @@ export function ExportDebugPanel() {
                 </summary>
                 <div className="mt-2 rounded-lg bg-slate-50 p-3 font-mono text-xs">
                   <JsonTree data={editorDebug.layout} />
+                </div>
+              </details>
+
+              {/* 表格样式 */}
+              <details className="group">
+                <summary className="cursor-pointer text-xs font-semibold text-slate-700 hover:text-slate-900">
+                  表格样式 {editorDebug.tableStyles ? '' : '(无)'}
+                </summary>
+                <div className="mt-2 rounded-lg bg-slate-50 p-3 font-mono text-xs">
+                  <JsonTree data={editorDebug.tableStyles} />
                 </div>
               </details>
 
@@ -1033,7 +1385,7 @@ export function ExportDebugPanel() {
               </div>
             )}
           </div>
-        ) : (
+        ) : activeTab === 'export' ? (
           // 导出调试 Tab
           current ? (
             <div className="space-y-4">
@@ -1113,6 +1465,126 @@ export function ExportDebugPanel() {
               <span className="text-xs">执行导出操作后会显示调试信息</span>
             </div>
           )
+        ) : activeTab === 'logs' ? (
+          // 日志 Tab
+          <div className="space-y-4">
+            {/* 操作按钮 */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  const snapshot = captureEditorSnapshot()
+                  const allText = [
+                    '=== 完整调试快照 ===',
+                    `生成时间: ${new Date().toLocaleString()}`,
+                    '',
+                    '--- 表格插入日志 ---',
+                    ...tableInsertLogs.map(log => JSON.stringify(log, null, 2)),
+                    '',
+                    '--- 编辑器配置 (store 状态) ---',
+                    editorDebug ? JSON.stringify(editorDebug, null, 2) : '无',
+                    '',
+                    '--- CSS 变量 (生效的 CSS 自定义属性) ---',
+                    snapshot.cssVariables && Object.keys(snapshot.cssVariables).length > 0
+                      ? Object.entries(snapshot.cssVariables).map(([k, v]) => `${k}: ${v}`).join('\n')
+                      : '无',
+                    '',
+                    '--- 表格相关 CSS 变量 (--tpl-table-*) ---',
+                    snapshot.tableCssVariables && Object.keys(snapshot.tableCssVariables).length > 0
+                      ? Object.entries(snapshot.tableCssVariables).map(([k, v]) => `${k}: ${v}`).join('\n')
+                      : '无',
+                    '',
+                    '--- 所有 CSS 变量 ---',
+                    snapshot.allCssVariables && Object.keys(snapshot.allCssVariables).length > 0
+                      ? Object.keys(snapshot.allCssVariables).length + ' 个变量'
+                      : '无',
+                    '',
+                    '--- 关键元素计算样式 ---',
+                    JSON.stringify(snapshot.computedStyles, null, 2),
+                    '',
+                    '--- 编辑器 DOM 结构 ---',
+                    JSON.stringify(snapshot.elementTree, null, 2),
+                    '',
+                    '--- 表格详情 ---',
+                    snapshot.tables.length > 0
+                      ? snapshot.tables.map((t: any, i: number) => `表${i + 1}: ${t.tableInfo.rows}行 ${t.tableInfo.cells}列`).join('\n')
+                      : '无',
+                    '',
+                    '--- 所有控制台日志 ---',
+                    ...allLogs,
+                  ].join('\n')
+                  navigator.clipboard.writeText(allText)
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 2000)
+                }}
+                className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-blue-500 px-4 py-2 text-xs text-white hover:bg-blue-600"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                {copied ? '已复制全部日志' : '一键复制完整快照'}
+              </button>
+              <button
+                onClick={() => setAllLogs([])}
+                className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600 hover:bg-slate-200"
+              >
+                清空
+              </button>
+            </div>
+
+            {/* 表格插入日志 */}
+            {tableInsertLogs.length > 0 && (
+              <div>
+                <h4 className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-700">
+                  <span className="rounded bg-green-100 px-1.5 py-0.5 text-green-700">表格插入</span>
+                  <span className="font-normal text-slate-400">({tableInsertLogs.length} 条)</span>
+                </h4>
+                <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                  {tableInsertLogs.map((log, i) => (
+                    <div key={i} className="rounded-lg bg-slate-900 p-3 font-mono text-xs text-green-400">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-slate-500">#{i + 1}</span>
+                        <span className="text-slate-400">{log.timestamp}</span>
+                        {log.tableNumberingEnabled ? (
+                          <span className="rounded bg-green-900 px-1 text-green-300">编号启用</span>
+                        ) : (
+                          <span className="rounded bg-red-900 px-1 text-red-300">编号禁用</span>
+                        )}
+                      </div>
+                      <pre className="whitespace-pre-wrap">{JSON.stringify(log, null, 2)}</pre>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 实时日志流 */}
+            <div>
+              <h4 className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-700">
+                <span className="rounded bg-slate-100 px-1.5 py-0.5">控制台日志</span>
+                <span className="font-normal text-slate-400">({allLogs.length} 条，保留最近500条)</span>
+              </h4>
+              <div className="rounded-lg bg-[#1e1e1e] p-3 font-mono text-xs text-green-400 max-h-[300px] overflow-y-auto">
+                {allLogs.length === 0 ? (
+                  <div className="text-slate-500">暂无日志，执行操作后会显示</div>
+                ) : (
+                  allLogs.map((log, i) => (
+                    <div
+                      key={i}
+                      className={`whitespace-pre-wrap ${
+                        log.includes('[ERROR]') ? 'text-red-400' :
+                        log.includes('[WARN]') ? 'text-yellow-400' :
+                        'text-green-400'
+                      }`}
+                    >
+                      {log}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="py-8 text-center text-sm text-slate-400">
+            无内容
+          </div>
         )}
       </div>
     </div>
