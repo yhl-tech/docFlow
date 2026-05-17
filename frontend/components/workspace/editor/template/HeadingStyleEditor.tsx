@@ -131,6 +131,14 @@ function LevelHeadingRow({
               disabled={disabled}
             />
           </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">斜体</span>
+            <SwitchButton
+              checked={font.italic ?? false}
+              onChange={(v) => patchFont({ italic: v })}
+              disabled={disabled}
+            />
+          </div>
         </div>
       </div>
 
@@ -265,6 +273,7 @@ function LevelHeadingRow({
                 <option key={v} value={v}>{v} 级</option>
               ))}
             </select>
+            <p className="text-xs text-slate-400">仅影响 Word 导出，预览不体现</p>
           </div>
         </RowGrid>
       </SectionCard>

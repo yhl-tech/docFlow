@@ -249,6 +249,7 @@ export function HeaderFooterEditor({ headerFooter, fonts, onChange, disabled }: 
       {/* 页眉页脚选项 */}
       <div className="space-y-2 rounded border border-slate-100 bg-slate-50 p-3">
         <SectionLabel>选项</SectionLabel>
+        <p className="text-xs text-slate-400">以下选项仅影响 Word 导出，预览不体现</p>
         <div className="space-y-2">
           <label className="flex items-center gap-2 text-xs text-slate-600">
             <input

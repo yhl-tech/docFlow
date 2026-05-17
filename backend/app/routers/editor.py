@@ -949,6 +949,92 @@ async def delete_document(doc_id: str, current_user: CurrentUser, db: DB):
 
 # ── 目录生成 ──────────────────────────────────────────────────────────────────
 
+# ── 文档软删除 / 恢复 / 移动 / 搜索 ──────────────────────────────────────────
+
+class DocumentMoveBody(BaseModel):
+    folder_id: Optional[str] = None
+
+
+class DocumentRenameBody(BaseModel):
+    title: str
+
+
+@router.put("/documents/{doc_id}/trash", status_code=204, summary="移入回收站")
+async def trash_document(doc_id: str, current_user: CurrentUser, db: DB):
+    from app.services import document_service
+    await document_service.trash_document(db, doc_id, current_user.id)
+
+
+@router.post("/documents/{doc_id}/restore", summary="从回收站恢复")
+async def restore_document(doc_id: str, current_user: CurrentUser, db: DB):
+    from app.services import document_service
+    doc = await document_service.restore_document(db, doc_id, current_user.id)
+    return DocumentMeta(
+        id=doc.id,
+        title=doc.title,
+        createdAt=doc.created_at.isoformat(),
+        updatedAt=doc.updated_at.isoformat(),
+        wordCount=doc.word_count,
+    )
+
+
+@router.delete("/documents/{doc_id}/permanent", status_code=204, summary="永久删除")
+async def delete_permanent(doc_id: str, current_user: CurrentUser, db: DB):
+    from app.services import document_service
+    await document_service.delete_permanent(db, doc_id, current_user.id)
+
+
+@router.delete("/documents/trash/empty", status_code=200, summary="清空回收站")
+async def empty_trash(current_user: CurrentUser, db: DB):
+    from app.services import document_service
+    count = await document_service.empty_trash(db, current_user.id)
+    return {"deleted": count}
+
+
+@router.put("/documents/{doc_id}/move", status_code=204, summary="移动文档到文件夹")
+async def move_document(doc_id: str, body: DocumentMoveBody, current_user: CurrentUser, db: DB):
+    from app.services import document_service
+    await document_service.move_document(db, doc_id, current_user.id, body.folder_id)
+
+
+@router.post("/documents/{doc_id}/duplicate", summary="复制文档")
+async def duplicate_document(doc_id: str, current_user: CurrentUser, db: DB):
+    from app.services import document_service
+    doc = await document_service.duplicate_document(db, doc_id, current_user.id)
+    return {"id": doc.id, "title": doc.title, "folderId": doc.folder_id}
+
+
+@router.put("/documents/{doc_id}/rename", summary="重命名文档")
+async def rename_document(doc_id: str, body: DocumentRenameBody, current_user: CurrentUser, db: DB):
+    from app.services import document_service
+    doc = await document_service.rename_document(db, doc_id, current_user.id, body.title)
+    return {"id": doc.id, "title": doc.title}
+
+
+@router.get("/documents/trash", summary="回收站列表")
+async def get_trash(current_user: CurrentUser, db: DB):
+    from app.services import document_service
+    docs = await document_service.get_trash(db, current_user.id)
+    return [
+        {
+            "id": d.id,
+            "title": d.title,
+            "folder_id": d.folder_id,
+            "deleted_at": d.deleted_at.isoformat() if d.deleted_at else None,
+            "word_count": d.word_count,
+        }
+        for d in docs
+    ]
+
+
+@router.get("/documents/search", summary="搜索文档")
+async def search_documents(q: str, current_user: CurrentUser, db: DB):
+    from app.services import document_service
+    return await document_service.search_documents(db, current_user.id, q)
+
+
+# ── 目录生成 ──────────────────────────────────────────────────────────────────
+
 @router.post("/generate-toc", summary="生成目录")
 async def generate_toc(body: GenerateTocRequest):
     toc = []

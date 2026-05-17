@@ -192,29 +192,35 @@ function CommonListPanel({ listStyles, fonts, onChange, disabled }: {
           </FieldRow>
           {/* 有序列表编号后自动生成 */}
           <FieldRow label="自动生成">
-            <label className="flex cursor-pointer items-center gap-2">
-              <input
-                type="checkbox"
-                checked={ordered?.autoGenerateAfter ?? false}
-                onChange={(e) => patchOrdered({ autoGenerateAfter: e.target.checked })}
-                disabled={disabled}
-                className="h-4 w-4 rounded border-slate-300 accent-slate-700"
-              />
-              <span className="text-xs text-slate-500">编号后自动生成</span>
-            </label>
+            <div className="space-y-0.5">
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={ordered?.autoGenerateAfter ?? false}
+                  onChange={(e) => patchOrdered({ autoGenerateAfter: e.target.checked })}
+                  disabled={disabled}
+                  className="h-4 w-4 rounded border-slate-300 accent-slate-700"
+                />
+                <span className="text-xs text-slate-500">编号后自动生成</span>
+              </label>
+              <p className="pl-6 text-xs text-slate-400">仅影响 Word 导出</p>
+            </div>
           </FieldRow>
           {/* 有序列表继续编号 */}
           <FieldRow label="继续编号">
-            <label className="flex cursor-pointer items-center gap-2">
-              <input
-                type="checkbox"
-                checked={ordered?.continueNumbering ?? false}
-                onChange={(e) => patchOrdered({ continueNumbering: e.target.checked })}
-                disabled={disabled}
-                className="h-4 w-4 rounded border-slate-300 accent-slate-700"
-              />
-              <span className="text-xs text-slate-500">续前表编号</span>
-            </label>
+            <div className="space-y-0.5">
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={ordered?.continueNumbering ?? false}
+                  onChange={(e) => patchOrdered({ continueNumbering: e.target.checked })}
+                  disabled={disabled}
+                  className="h-4 w-4 rounded border-slate-300 accent-slate-700"
+                />
+                <span className="text-xs text-slate-500">续前表编号</span>
+              </label>
+              <p className="pl-6 text-xs text-slate-400">仅影响 Word 导出</p>
+            </div>
           </FieldRow>
         </div>
       </SectionCard>

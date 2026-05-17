@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
-import { ChevronDown, Send, Brain, Copy, Check, FileEdit, Upload, Loader2, ChevronRight, Sparkles } from 'lucide-react'
+import { ChevronDown, Send, Brain, Copy, Check, FileEdit, Upload, Loader2, ChevronRight, Sparkles, X } from 'lucide-react'
 import { toast } from 'sonner'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -165,7 +165,7 @@ export function WorkspaceChat() {
     clearMessages,
   } = useAIStore()
 
-  const { setContent, setPendingWordStyles } = useEditorStore()
+  const { setContent, setPendingWordStyles, toggleRightPanel } = useEditorStore()
 
   // 自动滚动到底部（仅滚动对话列表容器，不触发整页滚动）
   useEffect(() => {
@@ -313,14 +313,23 @@ export function WorkspaceChat() {
             <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-slate-400" />
             AI 对话
           </h2>
-          {messages.length > 0 && (
+          <div className="flex items-center gap-2">
+            {messages.length > 0 && (
+              <button
+                onClick={handleClear}
+                className="text-xs text-slate-400 transition-colors hover:text-slate-600"
+              >
+                清空对话
+              </button>
+            )}
             <button
-              onClick={handleClear}
-              className="text-xs text-slate-400 transition-colors hover:text-slate-600"
+              onClick={() => toggleRightPanel('ai')}
+              title="关闭"
+              className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
             >
-              清空对话
+              <X size={14} />
             </button>
-          )}
+          </div>
         </div>
 
         {/* 消息列表区域 - 仅此区域可滚动，输入框固定底部 */}

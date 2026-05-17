@@ -7,6 +7,8 @@ import type { Editor } from "@tiptap/react"
 import {
   Undo2,
   Redo2,
+  PanelLeftOpen,
+  MessageSquare,
   Bold,
   Italic,
   Underline,
@@ -24,12 +26,13 @@ import {
   LayoutTemplate,
   FileDown,
   Sigma,
+  Save,
 } from "lucide-react"
 import { useEditorStore } from "@/store/editorStore"
 import { useExport } from "@/hooks/useExport"
 import { editorService } from "@/lib/api/editor"
 import { MathFormulaDialog } from "./MathFormulaDialog"
-import { TemplatePanel } from "./TemplatePanel"
+import { TemplateMiniSelector } from "@/components/workspace/template-market/TemplateMiniSelector"
 import { UpgradeModal } from "@/components/pricing/UpgradeModal"
 
 /* ─── 分组胶囊容器 ─── */
@@ -487,6 +490,10 @@ interface EditorRichToolbarProps {
   onClear: () => void
   editingFormula?: EditingFormula | null
   onClearEdit?: () => void
+  panelOpen?: boolean
+  onTogglePanel?: () => void
+  aiPanelOpen?: boolean
+  onToggleAI?: () => void
 }
 
 export function EditorRichToolbar({
@@ -495,22 +502,53 @@ export function EditorRichToolbar({
   onClear,
   editingFormula,
   onClearEdit,
+  panelOpen,
+  onTogglePanel,
+  aiPanelOpen,
+  onToggleAI,
 }: EditorRichToolbarProps) {
   const {
     exportStatus,
     isFullscreen,
     toggleFullscreen,
-    setUploadStatus,
     currentTemplate,
     templates,
     setTemplates,
     setAvailableFonts,
     setCurrentTemplate,
-    openTemplatePanel,
+    content,
+    templateBinding,
+    setCurrentDocumentId,
   } = useEditorStore()
   const { exportDoc, upgradeModalOpen, setUpgradeModalOpen } = useExport()
   const isExporting = exportStatus === "loading"
+  const [isSaving, setIsSaving] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const templateBtnRef = useRef<HTMLButtonElement>(null)
+  const [miniSelectorOpen, setMiniSelectorOpen] = useState(false)
+
+  async function handleSave() {
+    if (!content.trim()) {
+      toast.error('请先输入内容再保存')
+      return
+    }
+    setIsSaving(true)
+    try {
+      const res = await editorService.saveDocument({
+        content,
+        title: '',
+        template: templateBinding?.templateId,
+        templateBinding: templateBinding ?? undefined,
+      })
+      setCurrentDocumentId(res.id)
+      toast.success('已保存')
+    } catch (e: any) {
+      const code = e?.response?.data?.code
+      toast.error(code === 'AUTH_REQUIRED' ? '请先登录后使用文档功能' : '保存失败')
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   /* 首次挂载时预拉取模板列表，确保面板打开时有数据 */
   useEffect(() => {
@@ -525,7 +563,7 @@ export function EditorRichToolbar({
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   /* 监听模板配置变化，给已插入的表格补充编号 */
-  const { draftTemplateConfig, templateBinding } = useEditorStore()
+  const { draftTemplateConfig } = useEditorStore()
   const prevConfigRef = useRef<string>('')
   
   useEffect(() => {
@@ -639,6 +677,22 @@ export function EditorRichToolbar({
       {/* 单行胶囊分组布局 */}
       <div className="flex items-center gap-2 flex-wrap">
 
+        {/* ── 面板展开 + AI对话（撤销左侧） ── */}
+        {((!panelOpen && onTogglePanel) || onToggleAI) && (
+          <PillGroup>
+            {!panelOpen && onTogglePanel && (
+              <ToolBtn onClick={onTogglePanel} title="展开文档面板">
+                <PanelLeftOpen className="w-3.5 h-3.5" />
+              </ToolBtn>
+            )}
+            {onToggleAI && (
+              <ToolBtn onClick={onToggleAI} title="AI 对话" active={aiPanelOpen}>
+                <MessageSquare className="w-3.5 h-3.5" />
+              </ToolBtn>
+            )}
+          </PillGroup>
+        )}
+
         {/* ── 历史操作组 ── */}
         <PillGroup>
           <ToolBtn onClick={() => editorRef.current?.chain().focus().undo().run()} title="撤销 (Ctrl+Z)">
@@ -714,22 +768,41 @@ export function EditorRichToolbar({
             {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
 
-          {/* 模板按钮 */}
+          {/* 模板按钮 + 迷你选择器 */}
+          <div className="relative">
+            <button
+              ref={templateBtnRef}
+              onClick={() => setMiniSelectorOpen((v) => !v)}
+              title="模板设置"
+              className={`
+                inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all
+                ${currentTemplate
+                  ? "border-indigo-200 bg-indigo-50/80 text-indigo-600 hover:bg-indigo-50"
+                  : "border-slate-200 bg-slate-50/80 text-slate-600 hover:bg-white hover:shadow-sm"
+                }
+              `}
+            >
+              <LayoutTemplate className="h-3.5 w-3.5" />
+              <span className="max-w-[80px] truncate">
+                {currentTemplate ? currentTemplate.name : "选择模板"}
+              </span>
+            </button>
+            <TemplateMiniSelector
+              anchorRef={templateBtnRef}
+              open={miniSelectorOpen}
+              onClose={() => setMiniSelectorOpen(false)}
+            />
+          </div>
+
+          {/* 保存按钮 */}
           <button
-            onClick={openTemplatePanel}
-            title="排版设置"
-            className={`
-              inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all
-              ${currentTemplate
-                ? "border-indigo-200 bg-indigo-50/80 text-indigo-600 hover:bg-indigo-50"
-                : "border-slate-200 bg-slate-50/80 text-slate-600 hover:bg-white hover:shadow-sm"
-              }
-            `}
+            onClick={handleSave}
+            disabled={isSaving}
+            title="保存文档 (Ctrl+S)"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-800 disabled:opacity-50"
           >
-            <LayoutTemplate className="h-3.5 w-3.5" />
-            <span className="max-w-[80px] truncate">
-              {currentTemplate ? currentTemplate.name : "选择模板"}
-            </span>
+            <Save className="h-3.5 w-3.5" />
+            <span>{isSaving ? '保存中…' : '保存'}</span>
           </button>
 
           {/* 导出按钮 */}
@@ -751,9 +824,6 @@ export function EditorRichToolbar({
           ))}
         </div>
       </div>
-
-      {/* 模板设置面板 */}
-      <TemplatePanel />
 
       {/* 配额不足 / 余额不足时自动弹出的升级弹窗 */}
       <UpgradeModal

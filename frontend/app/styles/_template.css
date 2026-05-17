@@ -30,8 +30,13 @@
   font-family: var(--tpl-title-font, inherit) !important;
   font-size: var(--tpl-title-size, 1.75rem) !important;
   font-weight: var(--tpl-title-weight, 700) !important;
+  font-style: var(--tpl-title-italic, normal) !important;
+  color: var(--tpl-title-color, inherit) !important;
   text-align: var(--tpl-title-align, center) !important;
   text-align-last: var(--tpl-title-align, center) !important;
+  line-height: var(--tpl-title-line-height, 1.4) !important;
+  margin-top: var(--tpl-title-space-before, 0) !important;
+  margin-bottom: var(--tpl-title-space-after, 0.5rem) !important;
   display: block !important;
   width: 100% !important;
   margin-left: auto !important;
@@ -48,7 +53,12 @@
   font-family: var(--tpl-subtitle-font, inherit) !important;
   font-size: var(--tpl-subtitle-size, 1rem) !important;
   font-weight: var(--tpl-subtitle-weight, 400) !important;
+  font-style: var(--tpl-subtitle-italic, normal) !important;
+  color: var(--tpl-subtitle-color, inherit) !important;
   text-align: var(--tpl-subtitle-align, left) !important;
+  line-height: var(--tpl-subtitle-line-height, inherit) !important;
+  margin-top: var(--tpl-subtitle-space-before, 0) !important;
+  margin-bottom: var(--tpl-subtitle-space-after, 0.25rem) !important;
 }
 
 /* 正文样式 - 通过 data-style-key 匹配 */
@@ -56,9 +66,13 @@
   font-family: var(--tpl-body-font, inherit) !important;
   font-size: var(--tpl-body-size, 0.9375rem) !important;
   font-weight: var(--tpl-body-weight, 400) !important;
+  font-style: var(--tpl-body-italic, normal) !important;
+  color: var(--tpl-body-color, inherit) !important;
   text-align: var(--tpl-body-align, left) !important;
   text-indent: var(--tpl-body-indent, 0) !important;
   line-height: var(--tpl-body-line-height, 1.75) !important;
+  margin-top: var(--tpl-body-space-before, 0) !important;
+  margin-bottom: var(--tpl-body-space-after, 0.375rem) !important;
 }
 
 /* ─── 标题样式 - 通过 data-style-key 属性匹配 ─── */
@@ -76,6 +90,8 @@
   font-family: var(--tpl-h1-font, inherit) !important;
   font-size: var(--tpl-h1-size, 1rem) !important;
   font-weight: var(--tpl-h1-weight, 700) !important;
+  font-style: var(--tpl-h1-italic, normal) !important;
+  color: var(--tpl-h1-color, inherit) !important;
   text-align: var(--tpl-h1-align, left) !important;
   margin-top: var(--tpl-h1-space-before, 1.25rem) !important;
   margin-bottom: var(--tpl-h1-space-after, 0.5rem) !important;
@@ -87,6 +103,8 @@
   font-family: var(--tpl-h2-font, inherit) !important;
   font-size: var(--tpl-h2-size, 1rem) !important;
   font-weight: var(--tpl-h2-weight, 700) !important;
+  font-style: var(--tpl-h2-italic, normal) !important;
+  color: var(--tpl-h2-color, inherit) !important;
   text-align: var(--tpl-h2-align, left) !important;
   margin-top: var(--tpl-h2-space-before, 1rem) !important;
   margin-bottom: var(--tpl-h2-space-after, 0.5rem) !important;
@@ -98,6 +116,8 @@
   font-family: var(--tpl-h3-font, inherit) !important;
   font-size: var(--tpl-h3-size, 1rem) !important;
   font-weight: var(--tpl-h3-weight, 600) !important;
+  font-style: var(--tpl-h3-italic, normal) !important;
+  color: var(--tpl-h3-color, inherit) !important;
   text-align: var(--tpl-h3-align, left) !important;
   margin-top: var(--tpl-h3-space-before, 0.875rem) !important;
   margin-bottom: var(--tpl-h3-space-after, 0.375rem) !important;
@@ -109,6 +129,8 @@
   font-family: var(--tpl-h4-font, inherit) !important;
   font-size: var(--tpl-h4-size, 1rem) !important;
   font-weight: var(--tpl-h4-weight, 600) !important;
+  font-style: var(--tpl-h4-italic, normal) !important;
+  color: var(--tpl-h4-color, inherit) !important;
   text-align: var(--tpl-h4-align, left) !important;
   margin-top: var(--tpl-h4-space-before, 0.75rem) !important;
   margin-bottom: var(--tpl-h4-space-after, 0.25rem) !important;
@@ -120,10 +142,25 @@
   font-family: var(--tpl-h5-font, inherit) !important;
   font-size: var(--tpl-h5-size, 1rem) !important;
   font-weight: var(--tpl-h5-weight, 600) !important;
+  font-style: var(--tpl-h5-italic, normal) !important;
+  color: var(--tpl-h5-color, inherit) !important;
   text-align: var(--tpl-h5-align, left) !important;
   margin-top: var(--tpl-h5-space-before, 0.75rem) !important;
   margin-bottom: var(--tpl-h5-space-after, 0.25rem) !important;
   line-height: var(--tpl-h5-line-height, 1.35) !important;
+}
+
+/* 标题 h6 */
+.tpl-paper [data-style-key="heading_6"] {
+  font-family: var(--tpl-h6-font, inherit) !important;
+  font-size: var(--tpl-h6-size, 0.9375rem) !important;
+  font-weight: var(--tpl-h6-weight, 600) !important;
+  font-style: var(--tpl-h6-italic, normal) !important;
+  color: var(--tpl-h6-color, inherit) !important;
+  text-align: var(--tpl-h6-align, left) !important;
+  margin-top: var(--tpl-h6-space-before, 0.5rem) !important;
+  margin-bottom: var(--tpl-h6-space-after, 0.25rem) !important;
+  line-height: var(--tpl-h6-line-height, 1.35) !important;
 }
 
 /* ─── 表格样式 ─── */
@@ -294,6 +331,7 @@
   margin-top: var(--tpl-ol-space-before, 0) !important;
   margin-bottom: var(--tpl-ol-space-after, 0) !important;
   line-height: var(--tpl-ol-line-height, inherit) !important;
+  text-align: var(--tpl-ol-align, left) !important;
 }
 
 /* 有序列表项符号颜色和字体 */
@@ -308,10 +346,15 @@
 .tpl-paper .tiptap pre {
   font-family: var(--tpl-code-font, "JetBrains Mono", "Fira Code", Consolas, monospace) !important;
   font-size: var(--tpl-code-size, 0.8125rem) !important;
+  font-weight: var(--tpl-code-weight, normal) !important;
+  font-style: var(--tpl-code-italic, normal) !important;
   color: var(--tpl-code-color, #e2e8f0) !important;
   background-color: var(--tpl-code-bg, #1e293b) !important;
   line-height: var(--tpl-code-line-height, 1.65) !important;
-  border: var(--tpl-code-border, none) !important;
+  border-top: var(--tpl-code-border-top, none) !important;
+  border-right: var(--tpl-code-border-right, none) !important;
+  border-bottom: var(--tpl-code-border-bottom, none) !important;
+  border-left: var(--tpl-code-border-left, none) !important;
   padding-top: var(--tpl-code-padding-top, 1rem) !important;
   padding-bottom: var(--tpl-code-padding-bottom, 1rem) !important;
   padding-left: var(--tpl-code-padding-left, 1.25rem) !important;
@@ -337,6 +380,25 @@
 }
 
 /* ─── 图片样式 ─── */
+
+/* 预览中的图片占位 svg 跟随图片变量 */
+.tpl-paper .preview-img {
+  text-align: var(--tpl-img-align, left) !important;
+  line-height: var(--tpl-img-line-height, normal) !important;
+}
+.tpl-paper .preview-img svg {
+  display: inline-block !important;
+  margin-top: var(--tpl-img-margin-top, 0) !important;
+  margin-bottom: var(--tpl-img-margin-bottom, 0) !important;
+  border: var(--tpl-img-border, none) !important;
+  filter: var(--tpl-img-filter, none) !important;
+}
+.tpl-paper .preview-img-caption {
+  text-align: var(--tpl-img-align, left) !important;
+  font-size: 9pt;
+  color: #888;
+  margin-top: 2pt;
+}
 
 /* 图片间距、边框、亮度/对比度效果 */
 .tpl-paper .tiptap img {
@@ -377,13 +439,19 @@
 }
 
 /* 代码块行号（当 lineNumber.show=true 时显示，通过 counter 模拟） */
+.tpl-paper .tiptap pre[data-line-numbers] {
+  counter-reset: linenumber !important;
+}
 .tpl-paper .tiptap pre[data-line-numbers] .line::before {
   display: var(--tpl-code-line-number-show, none) !important;
   counter-increment: linenumber !important;
   content: counter(linenumber) !important;
   color: var(--tpl-code-line-number-color, #888888) !important;
   min-width: 2.5em !important;
-  padding-right: 0.5em !important;
+  padding-right: 0.75em !important;
   text-align: right !important;
   user-select: none !important;
+}
+.tpl-paper .tiptap pre[data-line-numbers] .line {
+  display: block !important;
 }

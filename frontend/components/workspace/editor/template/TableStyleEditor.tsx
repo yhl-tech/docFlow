@@ -499,13 +499,65 @@ export function TableStyleEditor({
 
       {/* 七、表格编号 */}
       <SectionCard title="七、表格编号">
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-slate-600">启用表格编号</span>
-          <Switch
-            checked={cfg.tableNumbering?.enabled ?? false}
-            onChange={(v) => patch({ tableNumbering: { ...cfg.tableNumbering, enabled: v } })}
-            disabled={disabled}
-          />
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-600">启用表格编号</span>
+            <Switch
+              checked={cfg.tableNumbering?.enabled ?? false}
+              onChange={(v) => patch({ tableNumbering: { ...cfg.tableNumbering, enabled: v } })}
+              disabled={disabled}
+            />
+          </div>
+          {cfg.tableNumbering?.enabled && (
+            <>
+              <RowGrid>
+                <div className="space-y-1.5">
+                  <FieldLabel>编号前缀</FieldLabel>
+                  <input
+                    type="text"
+                    value={cfg.tableNumbering?.prefix ?? "表 "}
+                    onChange={(e) => patch({ tableNumbering: { ...cfg.tableNumbering, prefix: e.target.value } })}
+                    disabled={disabled}
+                    className="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-300 disabled:opacity-50"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <FieldLabel>编号后缀</FieldLabel>
+                  <input
+                    type="text"
+                    value={cfg.tableNumbering?.suffix ?? ""}
+                    onChange={(e) => patch({ tableNumbering: { ...cfg.tableNumbering, suffix: e.target.value } })}
+                    disabled={disabled}
+                    className="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-300 disabled:opacity-50"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <FieldLabel>起始编号</FieldLabel>
+                  <NumberInput
+                    value={cfg.tableNumbering?.startNumber ?? 1}
+                    onChange={(v) => patch({ tableNumbering: { ...cfg.tableNumbering, startNumber: v } })}
+                    min={1}
+                    max={999}
+                    step={1}
+                    disabled={disabled}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <FieldLabel>编号样式</FieldLabel>
+                  <select
+                    value={cfg.tableNumbering?.style ?? "number"}
+                    onChange={(e) => patch({ tableNumbering: { ...cfg.tableNumbering, style: e.target.value as any } })}
+                    disabled={disabled}
+                    className="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-300 disabled:opacity-50"
+                  >
+                    <option value="number">数字（1, 2, 3）</option>
+                    <option value="arabic">阿拉伯数字</option>
+                    <option value="roman">罗马数字（i, ii）</option>
+                  </select>
+                </div>
+              </RowGrid>
+            </>
+          )}
         </div>
       </SectionCard>
 
@@ -518,6 +570,7 @@ export function TableStyleEditor({
           <ToggleButton checked={cfg.options?.allowSplitTable ?? false} onChange={(v) => patch({ options: { ...cfg.options, allowSplitTable: v } })} label="允许在单元格中拆分表格" disabled={disabled} />
           <ToggleButton checked={cfg.options?.useAlignment ?? false} onChange={(v) => patch({ options: { ...cfg.options, useAlignment: v } })} label="对边框和底纹使用对齐" disabled={disabled} />
         </div>
+        <p className="mt-3 text-xs text-slate-400">以上选项仅影响 Word 导出，预览不体现</p>
       </SectionCard>
     </div>
   )

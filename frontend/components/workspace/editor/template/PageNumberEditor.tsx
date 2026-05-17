@@ -129,32 +129,36 @@ export function PageNumberEditor({ pageNumber, onChange, disabled }: PageNumberE
             />
           </div>
 
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-1.5 text-xs text-slate-600">
-              <input
-                type="checkbox"
-                checked={config.showOnFirstPage ?? false}
-                onChange={(e) => onChange({ showOnFirstPage: e.target.checked })}
-                disabled={disabled}
-                className="rounded border-slate-300"
-              />
-              首页显示页码
-            </label>
-            <label className="flex items-center gap-1.5 text-xs text-slate-600">
-              <input
-                type="checkbox"
-                checked={config.continueFromPrevious ?? false}
-                onChange={(e) => onChange({ continueFromPrevious: e.target.checked })}
-                disabled={disabled}
-                className="rounded border-slate-300"
-              />
-              续前节
-            </label>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={config.showOnFirstPage ?? false}
+                  onChange={(e) => onChange({ showOnFirstPage: e.target.checked })}
+                  disabled={disabled}
+                  className="rounded border-slate-300"
+                />
+                首页显示页码
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={config.continueFromPrevious ?? false}
+                  onChange={(e) => onChange({ continueFromPrevious: e.target.checked })}
+                  disabled={disabled}
+                  className="rounded border-slate-300"
+                />
+                续前节
+              </label>
+            </div>
+            <p className="text-xs text-slate-400">以上选项仅影响 Word 导出，预览不体现</p>
           </div>
 
           {/* 章节设置 */}
           <div className="space-y-2 rounded border border-slate-100 bg-slate-50 p-3">
             <p className="text-xs font-medium text-slate-600">章节设置</p>
+            <p className="text-xs text-slate-400">以下选项仅影响 Word 导出，预览不体现</p>
             <div className="flex items-center gap-2">
               <label className="flex items-center gap-1.5 text-xs text-slate-600">
                 <input

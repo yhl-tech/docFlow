@@ -16,7 +16,7 @@ from app.core.limiter import limiter
 from app.core.logging import setup_logging
 from app.core.middleware import LoggingMiddleware
 from app.database import init_db
-from app.routers import auth, export, records, user, payment, ai, editor
+from app.routers import auth, export, records, user, payment, ai, editor, folders
 
 
 # 配置 loguru 日志输出到 stdout（确保终端能看到日志）
@@ -72,6 +72,7 @@ app.include_router(user.router, prefix="/api/user", tags=["用户"])
 app.include_router(payment.router, prefix="/api/payment", tags=["支付"])
 app.include_router(ai.router, prefix="/api/ai", tags=["AI编辑"])
 app.include_router(editor.router, prefix="/api/editor", tags=["编辑器"])
+app.include_router(folders.router, prefix="/api/folders", tags=["文件夹"])
 
 # 静态文件（上传图片等）
 _assets_dir = Path(__file__).parent.parent / "assets"

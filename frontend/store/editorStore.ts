@@ -111,6 +111,11 @@ interface EditorState {
   // 编辑器实例引用（用于模板面板直接操作编辑器）
   editorInstance: Editor | null
   setEditorInstance: (editor: Editor | null) => void
+
+  // 右侧面板（大纲 / AI，互斥）
+  rightPanelMode: 'outline' | 'ai' | null
+  setRightPanelMode: (mode: 'outline' | 'ai' | null) => void
+  toggleRightPanel: (mode: 'outline' | 'ai') => void
 }
 
 export const useEditorStore = create<EditorState>((set, get) => ({
@@ -502,6 +507,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
 
   editorInstance: null,
   setEditorInstance: (editorInstance) => set({ editorInstance }),
+
+  rightPanelMode: null,
+  setRightPanelMode: (rightPanelMode) => set({ rightPanelMode }),
+  toggleRightPanel: (mode) =>
+    set((s) => ({ rightPanelMode: s.rightPanelMode === mode ? null : mode })),
 }))
 
 // 派生计算：字符数、行数

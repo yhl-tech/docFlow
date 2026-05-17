@@ -49,6 +49,11 @@ interface FlatState {
   spacingMarginBottom: number
   spacingMarginLeft: number
   spacingMarginRight: number
+  sizeMode: string
+  maxWidthCm: number
+  maxHeightCm: number
+  keepAspectRatio: boolean
+  lineSpacing: number
 }
 
 function mapToFlat(cfg: ImageStyleConfig | undefined): FlatState {
@@ -58,7 +63,6 @@ function mapToFlat(cfg: ImageStyleConfig | undefined): FlatState {
   const dist = tw?.distanceMm ?? {}
   const spacing = cfg?.spacing ?? {}
   const border = cfg?.border ?? {}
-  // 兼容 border.widthPt 和 position.borderWidthPt 两种格式
   const borderWidthPt = border.widthPt ?? pos.borderWidthPt ?? 0
   const borderColor = border.color ?? pos.borderColor ?? ""
   return {
@@ -78,6 +82,11 @@ function mapToFlat(cfg: ImageStyleConfig | undefined): FlatState {
     spacingMarginBottom: spacing.marginBottomCm ?? 0.21,
     spacingMarginLeft: spacing.marginLeftCm ?? 0,
     spacingMarginRight: spacing.marginRightCm ?? 0,
+    sizeMode: pos.sizeMode ?? "original",
+    maxWidthCm: pos.maxWidthCm ?? 12.7,
+    maxHeightCm: pos.maxHeightCm ?? 12.7,
+    keepAspectRatio: pos.keepAspectRatio !== false,
+    lineSpacing: cfg?.lineSpacing ?? 1.0,
   }
 }
 
@@ -86,6 +95,10 @@ function mapToNested(flat: FlatState): Partial<ImageStyleConfig> {
     position: {
       wrapType: flat.wrapType as any,
       horizontalAlign: flat.horizontalAlign as any,
+      sizeMode: flat.sizeMode as "original" | "maxLimit",
+      maxWidthCm: flat.sizeMode === "maxLimit" ? flat.maxWidthCm : undefined,
+      maxHeightCm: flat.sizeMode === "maxLimit" ? flat.maxHeightCm : undefined,
+      keepAspectRatio: flat.keepAspectRatio,
     },
     style: {
       brightness: flat.brightness || undefined,
@@ -111,6 +124,7 @@ function mapToNested(flat: FlatState): Partial<ImageStyleConfig> {
       marginLeftCm: flat.spacingMarginLeft,
       marginRightCm: flat.spacingMarginRight,
     },
+    lineSpacing: flat.lineSpacing,
   }
 }
 
@@ -272,15 +286,8 @@ export function ImageStyleEditor({
           <div className="space-y-1">
             <label className="text-xs text-slate-500">尺寸模式</label>
             <select
-              value={imageStyles?.position?.sizeMode ?? "original"}
-              onChange={(e) => {
-                onChange({
-                  position: {
-                    ...imageStyles?.position,
-                    sizeMode: e.target.value as "original" | "maxLimit",
-                  },
-                })
-              }}
+              value={flat.sizeMode}
+              onChange={(e) => update({ sizeMode: e.target.value })}
               disabled={disabled}
               className="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-300 disabled:opacity-50"
             >
@@ -289,17 +296,13 @@ export function ImageStyleEditor({
             </select>
           </div>
 
-          {imageStyles?.position?.sizeMode === "maxLimit" && (
+          {flat.sizeMode === "maxLimit" && (
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">最大宽度 (cm)</label>
                 <NumberInput
-                  value={imageStyles?.position?.maxWidthCm ?? 12.7}
-                  onChange={(v) =>
-                    onChange({
-                      position: { ...imageStyles?.position, maxWidthCm: v },
-                    })
-                  }
+                  value={flat.maxWidthCm}
+                  onChange={(v) => update({ maxWidthCm: v })}
                   min={1}
                   max={50}
                   step={0.1}
@@ -309,12 +312,8 @@ export function ImageStyleEditor({
               <div className="space-y-1">
                 <label className="text-xs text-slate-500">最大高度 (cm)</label>
                 <NumberInput
-                  value={imageStyles?.position?.maxHeightCm ?? 12.7}
-                  onChange={(v) =>
-                    onChange({
-                      position: { ...imageStyles?.position, maxHeightCm: v },
-                    })
-                  }
+                  value={flat.maxHeightCm}
+                  onChange={(v) => update({ maxHeightCm: v })}
                   min={1}
                   max={50}
                   step={0.1}
@@ -325,27 +324,24 @@ export function ImageStyleEditor({
           )}
 
           {/* 保持宽高比 */}
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-slate-600">保持宽高比</span>
-            <Switch
-              checked={imageStyles?.position?.keepAspectRatio !== false}
-              onChange={(v) =>
-                onChange({
-                  position: { ...imageStyles?.position, keepAspectRatio: v },
-                })
-              }
-              disabled={disabled}
-            />
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-600">保持宽高比</span>
+              <Switch
+                checked={flat.keepAspectRatio}
+                onChange={(v) => update({ keepAspectRatio: v })}
+                disabled={disabled}
+              />
+            </div>
+            <p className="text-xs text-slate-400">仅影响 Word 导出，预览不体现</p>
           </div>
 
           {/* 行间距 */}
           <div className="space-y-1">
             <label className="text-xs text-slate-500">行间距</label>
             <select
-              value={imageStyles?.lineSpacing ?? 1.0}
-              onChange={(e) =>
-                onChange({ lineSpacing: parseFloat(e.target.value) })
-              }
+              value={flat.lineSpacing}
+              onChange={(e) => update({ lineSpacing: parseFloat(e.target.value) })}
               disabled={disabled}
               className="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-300 disabled:opacity-50"
             >

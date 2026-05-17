@@ -261,26 +261,18 @@ export function CodeBlockEditor({
       <SectionCard title="三、背景与文字色">
         <RowGrid>
           <div className="space-y-1.5">
-            <FieldLabel>填充颜色</FieldLabel>
+            <FieldLabel>背景填充色</FieldLabel>
             <ColorPicker
               value={shading.fill ?? ''}
-              onChange={(v) => patch({ shading: { ...shading, fill: v || undefined } })}
+              onChange={(v) => patch({ shading: { ...shading, fill: v || undefined, applyTo: 'paragraph' } })}
               disabled={disabled}
             />
           </div>
           <div className="space-y-1.5">
             <FieldLabel>文字颜色</FieldLabel>
             <ColorPicker
-              value={kbd.foregroundColor ?? ''}
-              onChange={(v) => patch({ keyboardStyle: { ...kbd, foregroundColor: v || undefined } })}
-              disabled={disabled}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <FieldLabel>背景色</FieldLabel>
-            <ColorPicker
-              value={kbd.backgroundColor ?? ''}
-              onChange={(v) => patch({ keyboardStyle: { ...kbd, backgroundColor: v || undefined } })}
+              value={font.color ?? ''}
+              onChange={(v) => patchFont({ color: v || undefined })}
               disabled={disabled}
             />
           </div>
@@ -313,27 +305,18 @@ export function CodeBlockEditor({
 
       {/* 五、制表位 */}
       <SectionCard title="五、制表位">
-        <RowGrid>
-          <div className="space-y-1.5">
-            <FieldLabel>默认制表位 (mm)</FieldLabel>
-            <NumberInput
-              value={ts.defaultMm ?? 21.7}
-              onChange={(v) => patch({ tabStop: { ...ts, defaultMm: v } })}
-              min={5}
-              max={50}
-              step={1}
-              disabled={disabled}
-            />
-          </div>
-          <div className="flex items-center justify-between rounded border border-slate-200 bg-white px-3 py-2">
-            <span className="text-xs text-slate-600">按字符缩进</span>
-            <SwitchButton
-              checked={ts.indentByChar ?? false}
-              onChange={(v) => patch({ tabStop: { ...ts, indentByChar: v } })}
-              disabled={disabled}
-            />
-          </div>
-        </RowGrid>
+        <div className="space-y-1.5">
+          <FieldLabel>默认制表位 (mm)</FieldLabel>
+          <NumberInput
+            value={ts.defaultMm ?? 21.7}
+            onChange={(v) => patch({ tabStop: { ...ts, defaultMm: v } })}
+            min={5}
+            max={50}
+            step={1}
+            disabled={disabled}
+          />
+          <p className="text-xs text-slate-400">影响代码中 Tab 字符的显示宽度</p>
+        </div>
       </SectionCard>
     </div>
   )

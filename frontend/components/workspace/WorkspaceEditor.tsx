@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import type { Editor } from '@tiptap/react'
@@ -15,7 +15,14 @@ interface EditingFormula {
   pos: number
 }
 
-export function WorkspaceEditor() {
+interface WorkspaceEditorProps {
+  panelOpen?: boolean
+  onTogglePanel?: () => void
+  aiPanelOpen?: boolean
+  onToggleAI?: () => void
+}
+
+export function WorkspaceEditor({ panelOpen, onTogglePanel, aiPanelOpen, onToggleAI }: WorkspaceEditorProps = {}) {
   const { clearContent, content } = useEditorStore()
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [editingFormula, setEditingFormula] = useState<EditingFormula | null>(null)
@@ -45,6 +52,10 @@ export function WorkspaceEditor() {
         onClear={handleClear}
         editingFormula={editingFormula}
         onClearEdit={() => setEditingFormula(null)}
+        panelOpen={panelOpen}
+        onTogglePanel={onTogglePanel}
+        aiPanelOpen={aiPanelOpen}
+        onToggleAI={onToggleAI}
       />
 
       {/* 编辑区（TipTap WYSIWYG） */}
