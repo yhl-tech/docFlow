@@ -1,0 +1,38 @@
+# Environment files. Keep *.env.example tracked.
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Local databases. SQLite WAL files can hold phone numbers and SMS codes.
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.db-journal
+
+# Payment certificates and private keys
+**/certs/
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+*.swp
