@@ -46,10 +46,13 @@ coverage.xml
 .DS_Store
 Thumbs.db
 
-# Database
+# Database (WAL sidecars can contain phone numbers and SMS codes)
 *.db
 *.sqlite
 *.sqlite3
+*.db-shm
+*.db-wal
+*.db-journal
 
 # Logs
 *.log

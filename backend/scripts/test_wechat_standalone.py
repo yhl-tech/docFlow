@@ -1,14 +1,33 @@
 """
 微信支付独立诊断脚本（公钥模式）
+
+Reads merchant credentials from the environment. Do not hardcode them.
 """
+import os
 from pathlib import Path
 
-# 配置
-WECHAT_MCH_ID = "1744384746"
-WECHAT_APP_ID = "wxb254ce8441bbf79c"
-WECHAT_API_V3_KEY = "A1b2C3d4E5f6G7h8I9j0K1L2M3N4O5P6"
-WECHAT_CERT_SERIAL_NO = "1E63E90C2C5A9FFA712D00F90E19B68DA34AC521"
-WECHAT_PUBLIC_KEY_ID = "PUB_KEY_ID_0117443847462026041800192069001800"
+WECHAT_MCH_ID = os.environ.get("WECHAT_MCH_ID", "")
+WECHAT_APP_ID = os.environ.get("WECHAT_APP_ID", "")
+WECHAT_API_V3_KEY = os.environ.get("WECHAT_API_V3_KEY", "")
+WECHAT_CERT_SERIAL_NO = os.environ.get("WECHAT_CERT_SERIAL_NO", "")
+WECHAT_PUBLIC_KEY_ID = os.environ.get("WECHAT_PUBLIC_KEY_ID", "")
+_missing = [
+    name
+    for name, value in {
+        "WECHAT_MCH_ID": WECHAT_MCH_ID,
+        "WECHAT_APP_ID": WECHAT_APP_ID,
+        "WECHAT_API_V3_KEY": WECHAT_API_V3_KEY,
+        "WECHAT_CERT_SERIAL_NO": WECHAT_CERT_SERIAL_NO,
+        "WECHAT_PUBLIC_KEY_ID": WECHAT_PUBLIC_KEY_ID,
+    }.items()
+    if not value
+]
+if _missing:
+    raise SystemExit(
+        "Missing WeChat environment variables: "
+        + ", ".join(_missing)
+        + ". Copy backend/.env.example to backend/.env and export those values."
+    )
 
 backend_dir = Path(__file__).parent.parent
 key_path = backend_dir / "certs" / "apiclient_key.pem"

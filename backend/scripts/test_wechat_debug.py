@@ -2,6 +2,7 @@
 微信支付深度诊断 - 直接调用微信 API 检查配置
 """
 import json
+import os
 import time
 import base64
 import hashlib
@@ -11,11 +12,27 @@ from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.backends import default_backend
 
-# 配置
-WECHAT_MCH_ID = "1744384746"
-WECHAT_APP_ID = "wxb254ce8441bbf79c"
-WECHAT_API_V3_KEY = "A1b2C3d4E5f6G7h8I9j0K1L2M3N4O5P6"
-WECHAT_CERT_SERIAL_NO = "1E63E90C2C5A9FFA712D00F90E19B68DA34AC521"
+# Credentials come from the environment. Never hardcode merchant secrets.
+WECHAT_MCH_ID = os.environ.get("WECHAT_MCH_ID", "")
+WECHAT_APP_ID = os.environ.get("WECHAT_APP_ID", "")
+WECHAT_API_V3_KEY = os.environ.get("WECHAT_API_V3_KEY", "")
+WECHAT_CERT_SERIAL_NO = os.environ.get("WECHAT_CERT_SERIAL_NO", "")
+_missing = [
+    name
+    for name, value in {
+        "WECHAT_MCH_ID": WECHAT_MCH_ID,
+        "WECHAT_APP_ID": WECHAT_APP_ID,
+        "WECHAT_API_V3_KEY": WECHAT_API_V3_KEY,
+        "WECHAT_CERT_SERIAL_NO": WECHAT_CERT_SERIAL_NO,
+    }.items()
+    if not value
+]
+if _missing:
+    raise SystemExit(
+        "Missing WeChat environment variables: "
+        + ", ".join(_missing)
+        + ". Copy backend/.env.example to backend/.env and export those values."
+    )
 
 backend_dir = Path(__file__).parent.parent
 key_path = backend_dir / "certs" / "apiclient_key.pem"
